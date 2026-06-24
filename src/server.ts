@@ -31,6 +31,10 @@ async function start(): Promise<void> {
         logger.info("MongoDB connection closed");
         clearTimeout(timer);
         process.exit(exitCode);
+      }).catch((err) => {
+        logger.error("Failed to close MongoDB connection:", err);
+        clearTimeout(timer);
+        process.exit(exitCode);
       });
     });
   };
