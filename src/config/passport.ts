@@ -18,7 +18,11 @@ export function initializePassport(): void {
           const googleId = profile.id;
 
           if (!email) {
-            return done(new Error("Aucun email fourni par Google"));
+            return done(null, false, { message: "Aucun email fourni par Google" });
+          }
+
+          if (!profile._json?.email_verified) {
+            return done(null, false, { message: "Email Google non vérifié" });
           }
 
           let user = await User.findOne({ googleId });
@@ -39,7 +43,7 @@ export function initializePassport(): void {
             email,
             googleId,
             authProvider: "google",
-            firstName: profile.name?.givenName ?? "",
+            firstName: profile.name?.givenName ?? profile.displayName ?? "",
             lastName: profile.name?.familyName ?? "",
           });
 
@@ -50,17 +54,4 @@ export function initializePassport(): void {
       },
     ),
   );
-
-  passport.serializeUser((user, done) => {
-    done(null, (user as Express.User & { _id: unknown })._id as string);
-  });
-
-  passport.deserializeUser(async (id, done) => {
-    try {
-      const user = await User.findById(id);
-      done(null, user as unknown as Express.User | null);
-    } catch (error) {
-      done(error);
-    }
-  });
 }

@@ -34,9 +34,16 @@ router.get(
       return;
     }
     res.clearCookie("oauth_state");
-    passport.authenticate("google", {
-      session: false,
-      failureRedirect: `${env.CLIENT_URL}/login?error=google_auth_failed`,
+    passport.authenticate("google", { session: false }, (err: unknown, user: unknown, info: { message?: string } | undefined) => {
+      if (err) {
+        return next(err);
+      }
+      if (!user) {
+        const message = info?.message || "google_auth_failed";
+        return res.redirect(`${env.CLIENT_URL}/login?error=${encodeURIComponent(message)}`);
+      }
+      req.user = user as Express.User;
+      next();
     })(req, res, next);
   },
   googleCallback,
