@@ -2,9 +2,11 @@ import { Response } from "express";
 import { env } from "../config/env.js";
 import type { AuthTokens } from "../modules/auth/auth.types.js";
 
-function parseTimeToMs(time: string): number {
+export function parseTimeToMs(time: string): number {
   const match = time.match(/^(\d+)\s*(s|m|h|d)$/);
-  if (!match) return 0;
+  if (!match) {
+    throw new Error(`Invalid time format: "${time}". Expected a number followed by s, m, h, or d.`);
+  }
 
   const value = parseInt(match[1], 10);
   const unit = match[2];
