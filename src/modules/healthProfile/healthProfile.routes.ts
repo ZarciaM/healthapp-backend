@@ -9,6 +9,7 @@ import * as controller from "./healthProfile.controller.js";
 const router = Router();
 
 router.get("/", authMiddleware, controller.getMyProfile);
+router.get("/status", authMiddleware, controller.getOnboardingStatus);
 
 router.post(
   "/step/:step",

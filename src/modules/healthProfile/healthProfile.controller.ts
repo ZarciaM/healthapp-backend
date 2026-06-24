@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { sendSuccess } from "../../utils/ApiResponse.js";
 import { ApiError } from "../../utils/ApiError.js";
+import { TOTAL_STEPS } from "./healthProfile.validation.js";
 import * as healthProfileService from "./healthProfile.service.js";
 
 export const getMyProfile = asyncHandler(
@@ -11,6 +12,20 @@ export const getMyProfile = asyncHandler(
     );
 
     sendSuccess(res, 200, "Profil récupéré", { profile });
+  },
+);
+
+export const getOnboardingStatus = asyncHandler(
+  async (req: Request, res: Response) => {
+    const profile = await healthProfileService.getOrCreateProfile(
+      req.user!.userId,
+    );
+
+    sendSuccess(res, 200, "Statut de l'onboarding", {
+      isCompleted: profile.isCompleted,
+      currentStep: profile.onboardingStep,
+      totalSteps: TOTAL_STEPS,
+    });
   },
 );
 
