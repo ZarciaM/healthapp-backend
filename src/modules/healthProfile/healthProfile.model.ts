@@ -74,16 +74,12 @@ const healthProfileSchema = new Schema<IHealthProfile>(
 );
 
 healthProfileSchema.pre("save", function () {
-  const requiredFields = [
-    this.height,
-    this.currentWeight,
-    this.activityLevel,
-    this.goal,
-  ];
+  const hasStep1 = this.height && this.currentWeight;
+  const hasStep2 = this.activityLevel && this.goal;
+  const hasStep3 = this.medicalHistory !== undefined;
+  const hasStep4 = this.lifestyle !== undefined;
 
-  const allPresent = requiredFields.every(
-    (field) => field !== undefined && field !== null,
-  );
+  const allPresent = hasStep1 && hasStep2 && hasStep3 && hasStep4;
 
   if (allPresent) {
     this.isCompleted = true;

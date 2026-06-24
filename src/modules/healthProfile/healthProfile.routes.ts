@@ -28,7 +28,14 @@ router.post(
         throw ApiError.notFound("Utilisateur introuvable");
       }
 
-      const gender = (user.gender ?? "male") as "male" | "female";
+      const gender = user.gender;
+
+      if (!gender) {
+        throw ApiError.forbidden(
+          "Veuillez d'abord compléter votre profil (genre requis)",
+        );
+      }
+
       const schema = getStepSchema(step, gender);
 
       const result = schema.safeParse(req.body);

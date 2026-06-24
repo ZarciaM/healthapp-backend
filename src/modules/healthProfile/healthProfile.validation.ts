@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-export const TOTAL_STEPS = 5;
+export function getTotalSteps(gender: "male" | "female"): number {
+  return gender === "female" ? 5 : 4;
+}
 
 export const step1Schema = z.object({
   height: z
@@ -16,11 +18,11 @@ export const step1Schema = z.object({
 export const step2Schema = z.object({
   activityLevel: z.enum(
     ["sedentary", "light", "moderate", "active", "very_active"],
-    { message: "Niveau d'activité invalide" },
+    { error: "Niveau d'activité invalide" },
   ),
   goal: z.enum(
     ["lose_weight", "gain_weight", "maintain", "general_health"],
-    { message: "Objectif invalide" },
+    { error: "Objectif invalide" },
   ),
 });
 
@@ -45,7 +47,7 @@ export const step4Schema = z.object({
       .max(24, "Les heures de sommeil doivent être entre 0 et 24"),
     smoker: z.boolean(),
     alcoholConsumption: z.enum(["none", "occasional", "regular"], {
-      message: "Consommation d'alcool invalide",
+      error: "Consommation d'alcool invalide",
     }),
   }),
 });
@@ -53,7 +55,7 @@ export const step4Schema = z.object({
 export const step5WomenSchema = z.object({
   womenSpecific: z.object({
     cycleRegularity: z.enum(["regular", "irregular"], {
-      message: "Régularité du cycle invalide",
+      error: "Régularité du cycle invalide",
     }),
     lastPeriodDate: z
       .string()

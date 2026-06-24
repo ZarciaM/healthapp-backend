@@ -94,7 +94,7 @@ userSchema.pre("save", async function () {
   this.password = await bcrypt.hash(this.password, 12);
 });
 
-userSchema.virtual("isProfileComplete").get(function () {
+userSchema.virtual("hasBasicProfileInfo").get(function () {
   return !!(this.gender && this.dateOfBirth);
 });
 

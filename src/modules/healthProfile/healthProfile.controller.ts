@@ -2,7 +2,8 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { sendSuccess } from "../../utils/ApiResponse.js";
 import { ApiError } from "../../utils/ApiError.js";
-import { TOTAL_STEPS } from "./healthProfile.validation.js";
+import { getTotalSteps } from "./healthProfile.validation.js";
+import User from "../user/user.model.js";
 import * as healthProfileService from "./healthProfile.service.js";
 
 export const getMyProfile = asyncHandler(
@@ -21,10 +22,15 @@ export const getOnboardingStatus = asyncHandler(
       req.user!.userId,
     );
 
+    const user = await User.findById(req.user!.userId).select("gender");
+    const totalSteps = getTotalSteps(
+      (user?.gender ?? "male") as "male" | "female",
+    );
+
     sendSuccess(res, 200, "Statut de l'onboarding", {
       isCompleted: profile.isCompleted,
       currentStep: profile.onboardingStep,
-      totalSteps: TOTAL_STEPS,
+      totalSteps,
     });
   },
 );

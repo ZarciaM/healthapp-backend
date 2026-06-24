@@ -12,11 +12,11 @@ export const googleCallback = async (req: Request, res: Response) => {
     return;
   }
 
-  const tokens = await authService.issueTokensForUser(user);
+  const tokens = await authService.issueTokensForUser(user._id.toString());
 
   setAuthCookies(res, tokens);
 
-  const redirectUrl = user.isProfileComplete
+  const redirectUrl = user.hasBasicProfileInfo
     ? `${env.CLIENT_URL}/auth/callback`
     : `${env.CLIENT_URL}/auth/callback?onboarding=true`;
 

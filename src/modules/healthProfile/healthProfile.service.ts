@@ -27,24 +27,32 @@ function isProfileComplete(profile: IHealthProfile): boolean {
     profile.height &&
     profile.currentWeight &&
     profile.activityLevel &&
-    profile.goal
+    profile.goal &&
+    profile.medicalHistory &&
+    profile.lifestyle
   );
 }
 
 export async function getOrCreateProfile(
   userId: string,
 ): Promise<IHealthProfile> {
-  const existing = await HealthProfile.findOne({ userId });
+  const existing = await HealthProfile.findOneAndUpdate(
+    { userId },
+    {
+      $setOnInsert: {
+        userId,
+        onboardingStep: 0,
+        isCompleted: false,
+      },
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+    },
+  );
 
-  if (existing) {
-    return existing;
-  }
-
-  return HealthProfile.create({
-    userId,
-    onboardingStep: 0,
-    isCompleted: false,
-  });
+  return existing;
 }
 
 export async function submitStep(
