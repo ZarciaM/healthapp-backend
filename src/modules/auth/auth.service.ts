@@ -1,12 +1,19 @@
+import crypto from "node:crypto";
 import User from "../user/user.model.js";
 import { ApiError } from "../../utils/ApiError.js";
+import { parseTimeToMs } from "../../utils/cookies.js";
 import {
   generateAccessToken,
   generateRefreshToken,
   verifyRefreshToken,
 } from "../../utils/jwt.js";
+import { env } from "../../config/env.js";
 import type { AuthTokens } from "./auth.types.js";
 import type { RegisterInput, LoginInput } from "./auth.validation.js";
+
+function hashToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
 
 export async function register(
   data: RegisterInput,
@@ -18,7 +25,6 @@ export async function register(
 
   const user = await User.create({
     ...data,
-    dateOfBirth: new Date(data.dateOfBirth),
     authProvider: "local",
   });
 
@@ -26,9 +32,9 @@ export async function register(
   const refreshToken = generateRefreshToken(user._id.toString());
 
   user.refreshTokens.push({
-    token: refreshToken,
+    token: hashToken(refreshToken),
     createdAt: new Date(),
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    expiresAt: new Date(Date.now() + parseTimeToMs(env.JWT_REFRESH_EXPIRES_IN)),
   });
 
   await user.save();
@@ -53,9 +59,9 @@ export async function login(
   const refreshToken = generateRefreshToken(user._id.toString());
 
   user.refreshTokens.push({
-    token: refreshToken,
+    token: hashToken(refreshToken),
     createdAt: new Date(),
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    expiresAt: new Date(Date.now() + parseTimeToMs(env.JWT_REFRESH_EXPIRES_IN)),
   });
 
   await user.save();
@@ -73,8 +79,9 @@ export async function refreshTokens(
     throw ApiError.unauthorized("Refresh token invalide");
   }
 
+  const hashed = hashToken(incomingRefreshToken);
   const tokenIndex = user.refreshTokens.findIndex(
-    (rt) => rt.token === incomingRefreshToken,
+    (rt) => rt.token === hashed,
   );
 
   if (tokenIndex === -1) {
@@ -87,9 +94,9 @@ export async function refreshTokens(
   const refreshToken = generateRefreshToken(user._id.toString());
 
   user.refreshTokens.push({
-    token: refreshToken,
+    token: hashToken(refreshToken),
     createdAt: new Date(),
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    expiresAt: new Date(Date.now() + parseTimeToMs(env.JWT_REFRESH_EXPIRES_IN)),
   });
 
   await user.save();
@@ -102,6 +109,6 @@ export async function logout(
   refreshToken: string,
 ): Promise<void> {
   await User.findByIdAndUpdate(userId, {
-    $pull: { refreshTokens: { token: refreshToken } },
+    $pull: { refreshTokens: { token: hashToken(refreshToken) } },
   });
 }
