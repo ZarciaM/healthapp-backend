@@ -54,11 +54,9 @@ const userSchema = new Schema<IUser, UserModel, IUserMethods>(
     gender: {
       type: String,
       enum: ["male", "female"],
-      required: true,
     },
     dateOfBirth: {
       type: Date,
-      required: true,
     },
     isEmailVerified: {
       type: Boolean,
@@ -69,6 +67,7 @@ const userSchema = new Schema<IUser, UserModel, IUserMethods>(
   {
     timestamps: true,
     toJSON: {
+      virtuals: true,
       transform(_doc, ret) {
         const transformed = ret as Record<string, unknown>;
         delete transformed.password;
@@ -93,6 +92,10 @@ userSchema.pre("save", async function () {
   }
 
   this.password = await bcrypt.hash(this.password, 12);
+});
+
+userSchema.virtual("isProfileComplete").get(function () {
+  return !!(this.gender && this.dateOfBirth);
 });
 
 export default mongoose.model<IUser, UserModel>("User", userSchema);

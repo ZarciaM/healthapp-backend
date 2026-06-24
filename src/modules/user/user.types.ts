@@ -5,9 +5,10 @@ export interface IUser {
   authProvider: "local" | "google";
   firstName: string;
   lastName: string;
-  gender: "male" | "female";
-  dateOfBirth: Date;
+  gender?: "male" | "female";
+  dateOfBirth?: Date;
   isEmailVerified: boolean;
+  isProfileComplete: boolean;
   refreshTokens: {
     token: string;
     createdAt: Date;
