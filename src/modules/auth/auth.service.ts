@@ -11,8 +11,40 @@ import { env } from "../../config/env.js";
 import type { AuthTokens } from "./auth.types.js";
 import type { RegisterInput, LoginInput } from "./auth.validation.js";
 
+const MAX_REFRESH_TOKENS = 5;
+
 function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+export async function issueTokensForUser(
+  userId: string,
+): Promise<AuthTokens> {
+  const accessToken = generateAccessToken(userId);
+  const refreshToken = generateRefreshToken(userId);
+
+  await User.findByIdAndUpdate(userId, {
+    $pull: {
+      refreshTokens: { expiresAt: { $lte: new Date() } },
+    },
+    $push: {
+      refreshTokens: {
+        $each: [
+          {
+            token: hashToken(refreshToken),
+            createdAt: new Date(),
+            expiresAt: new Date(
+              Date.now() + parseTimeToMs(env.JWT_REFRESH_EXPIRES_IN),
+            ),
+          },
+        ],
+        $position: 0,
+        $slice: MAX_REFRESH_TOKENS,
+      },
+    },
+  });
+
+  return { accessToken, refreshToken };
 }
 
 export async function register(
@@ -28,18 +60,9 @@ export async function register(
     authProvider: "local",
   });
 
-  const accessToken = generateAccessToken(user._id.toString());
-  const refreshToken = generateRefreshToken(user._id.toString());
+  const tokens = await issueTokensForUser(user._id.toString());
 
-  user.refreshTokens.push({
-    token: hashToken(refreshToken),
-    createdAt: new Date(),
-    expiresAt: new Date(Date.now() + parseTimeToMs(env.JWT_REFRESH_EXPIRES_IN)),
-  });
-
-  await user.save();
-
-  return { user, tokens: { accessToken, refreshToken } };
+  return { user, tokens };
 }
 
 export async function login(
@@ -55,18 +78,9 @@ export async function login(
     throw ApiError.unauthorized("Email ou mot de passe incorrect");
   }
 
-  const accessToken = generateAccessToken(user._id.toString());
-  const refreshToken = generateRefreshToken(user._id.toString());
+  const tokens = await issueTokensForUser(user._id.toString());
 
-  user.refreshTokens.push({
-    token: hashToken(refreshToken),
-    createdAt: new Date(),
-    expiresAt: new Date(Date.now() + parseTimeToMs(env.JWT_REFRESH_EXPIRES_IN)),
-  });
-
-  await user.save();
-
-  return { user, tokens: { accessToken, refreshToken } };
+  return { user, tokens };
 }
 
 export async function refreshTokens(

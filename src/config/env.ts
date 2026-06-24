@@ -46,18 +46,22 @@ const envSchema = z.object({
 
   GOOGLE_CLIENT_ID: z
     .string()
-    .optional()
-    .default(""),
+    .trim()
+    .min(1, "GOOGLE_CLIENT_ID is required"),
 
   GOOGLE_CLIENT_SECRET: z
     .string()
-    .optional()
-    .default(""),
+    .trim()
+    .min(1, "GOOGLE_CLIENT_SECRET is required"),
 
   GOOGLE_CALLBACK_URL: z
     .string()
-    .url("GOOGLE_CALLBACK_URL must be a valid URL")
-    .default("http://localhost:5000/api/auth/google/callback"),
+    .url("GOOGLE_CALLBACK_URL must be a valid URL"),
+
+  SESSION_SECRET: z
+    .string()
+    .trim()
+    .min(1, "SESSION_SECRET is required"),
 });
 
 const parsed = envSchema.safeParse(process.env);
