@@ -10,6 +10,7 @@ import { initializePassport } from "./config/passport.js";
 import { notFoundHandler } from "./middlewares/notFound.middleware.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
 import authRoutes from "./modules/auth/auth.routes.js";
+import googleAuthRoutes from "./modules/auth/google.routes.js";
 
 const app = express();
 
@@ -50,6 +51,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/auth", googleAuthRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
