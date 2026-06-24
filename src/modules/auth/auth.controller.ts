@@ -3,6 +3,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { sendSuccess } from "../../utils/ApiResponse.js";
 import { setAuthCookies, clearAuthCookies } from "../../utils/cookies.js";
 import { ApiError } from "../../utils/ApiError.js";
+import { verifyRefreshToken } from "../../utils/jwt.js";
 import User from "../user/user.model.js";
 import * as authService from "./auth.service.js";
 
@@ -30,12 +31,23 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const logout = asyncHandler(async (req: Request, res: Response) => {
-  await authService.logout(req.user!.userId, req.cookies?.refreshToken);
+  const refreshToken = req.cookies?.refreshToken;
+  if (!refreshToken) {
+    throw ApiError.unauthorized("Refresh token manquant");
+  }
+
+  const { userId } = verifyRefreshToken(refreshToken);
+
+  await authService.logout(userId, refreshToken);
   clearAuthCookies(res);
   sendSuccess(res, 200, "Déconnexion réussie");
 });
 
 export const me = asyncHandler(async (req: Request, res: Response) => {
   const user = await User.findById(req.user!.userId);
+  if (!user) {
+    throw ApiError.unauthorized("Utilisateur introuvable");
+  }
+
   sendSuccess(res, 200, "Profil récupéré", { user });
 });
