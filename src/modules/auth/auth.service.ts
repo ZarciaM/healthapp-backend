@@ -27,6 +27,9 @@ export async function issueTokensForUser(
     $pull: {
       refreshTokens: { expiresAt: { $lte: new Date() } },
     },
+  });
+
+  await User.findByIdAndUpdate(userId, {
     $push: {
       refreshTokens: {
         $each: [
