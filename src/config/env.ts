@@ -58,10 +58,6 @@ const envSchema = z.object({
     .string()
     .url("GOOGLE_CALLBACK_URL must be a valid URL"),
 
-  SESSION_SECRET: z
-    .string()
-    .trim()
-    .min(1, "SESSION_SECRET is required"),
 });
 
 const parsed = envSchema.safeParse(process.env);
