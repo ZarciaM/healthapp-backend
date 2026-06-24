@@ -11,6 +11,7 @@ import { notFoundHandler } from "./middlewares/notFound.middleware.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import googleAuthRoutes from "./modules/auth/google.routes.js";
+import healthProfileRoutes from "./modules/healthProfile/healthProfile.routes.js";
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/auth", googleAuthRoutes);
+app.use("/api/health-profile", healthProfileRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
