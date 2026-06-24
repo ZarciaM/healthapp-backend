@@ -35,6 +35,8 @@ const userSchema = new Schema<IUser, UserModel, IUserMethods>(
     },
     googleId: {
       type: String,
+      unique: true,
+      sparse: true,
     },
     authProvider: {
       type: String,
