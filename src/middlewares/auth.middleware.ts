@@ -10,10 +10,15 @@ export function authMiddleware(
   const token = req.cookies?.accessToken;
 
   if (!token) {
-    throw ApiError.unauthorized("Token d'accès manquant");
+    next(ApiError.unauthorized("Authentification requise"));
+    return;
   }
 
-  const payload = verifyAccessToken(token);
-  req.user = { userId: payload.userId };
-  next();
+  try {
+    const payload = verifyAccessToken(token);
+    req.user = { userId: payload.userId };
+    next();
+  } catch {
+    next(ApiError.unauthorized("Session expirée ou invalide"));
+  }
 }

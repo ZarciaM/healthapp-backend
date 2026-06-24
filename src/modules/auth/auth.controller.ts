@@ -30,12 +30,12 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const logout = asyncHandler(async (req: Request, res: Response) => {
-  await authService.logout(req.user.userId, req.cookies?.refreshToken);
+  await authService.logout(req.user!.userId, req.cookies?.refreshToken);
   clearAuthCookies(res);
   sendSuccess(res, 200, "Déconnexion réussie");
 });
 
 export const me = asyncHandler(async (req: Request, res: Response) => {
-  const user = await User.findById(req.user.userId);
+  const user = await User.findById(req.user!.userId);
   sendSuccess(res, 200, "Profil récupéré", { user });
 });
