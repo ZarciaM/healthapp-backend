@@ -1,5 +1,8 @@
 {
   "watch": ["src"],
   "ext": "ts",
-  "exec": "ts-node --esm src/server.ts"
+  "exec": "node --loader ts-node/esm src/server.ts",
+  "env": {
+    "TS_NODE_TRANSPILE_ONLY": "true"
+  }
 }
