@@ -11,13 +11,20 @@ async function start(): Promise<void> {
     logger.info(`Server running on port ${env.PORT} in ${env.NODE_ENV} mode`);
   });
 
-  const gracefulShutdown = async (signal: string) => {
+  const gracefulShutdown = async (signal: string, exitCode = 0) => {
     logger.info(`${signal} received — shutting down gracefully`);
+
+    const shutdownTimeout = setTimeout(() => {
+      logger.error("Shutdown timed out, forcing exit");
+      process.exit(1);
+    }, 10000); // 10 second grace period
+
     server.close(() => {
       logger.info("HTTP server closed");
       mongoose.connection.close(false).then(() => {
         logger.info("MongoDB connection closed");
-        process.exit(0);
+        clearTimeout(shutdownTimeout);
+        process.exit(exitCode);
       });
     });
   };
@@ -27,8 +34,11 @@ async function start(): Promise<void> {
 
   process.on("unhandledRejection", (reason) => {
     logger.error("Unhandled rejection:", reason);
-    gracefulShutdown("unhandledRejection");
+    gracefulShutdown("unhandledRejection", 1);
   });
 }
 
-start();
+start().catch((error) => {
+  logger.error(`Failed to start server: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+  process.exit(1);
+});
