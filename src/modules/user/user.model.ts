@@ -73,6 +73,7 @@ const userSchema = new Schema<IUser, UserModel, IUserMethods>(
 
         delete transformed.password;
         delete transformed.refreshTokens;
+        delete transformed.googleId;
         delete transformed.__v;
 
         return transformed;
