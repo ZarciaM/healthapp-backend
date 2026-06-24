@@ -70,6 +70,7 @@ const userSchema = new Schema<IUser, UserModel, IUserMethods>(
       transform(_doc, ret) {
         const transformed = ret as Record<string, unknown>;
         delete transformed.password;
+        delete transformed.refreshTokens;
         delete transformed.__v;
         return transformed;
       },
