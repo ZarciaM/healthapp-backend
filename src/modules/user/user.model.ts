@@ -94,6 +94,8 @@ userSchema.pre("save", async function () {
   this.password = await bcrypt.hash(this.password, 12);
 });
 
+userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
+
 userSchema.virtual("isProfileComplete").get(function () {
   return !!(this.gender && this.dateOfBirth);
 });

@@ -1,18 +1,17 @@
 import { Request, Response } from "express";
 import { env } from "../../config/env.js";
 import { setAuthCookies } from "../../utils/cookies.js";
-import User from "../user/user.model.js";
 import * as authService from "./auth.service.js";
 
 export const googleCallback = async (req: Request, res: Response) => {
-  const user = req.user as unknown as InstanceType<typeof User>;
+  const user = req.user as { _id: { toString(): string }; isProfileComplete: boolean } | undefined;
 
   if (!user) {
     res.redirect(`${env.CLIENT_URL}/login?error=google_auth_failed`);
     return;
   }
 
-  const tokens = await authService.issueTokensForUser(user);
+  const tokens = await authService.issueTokensForUser(user._id.toString());
 
   setAuthCookies(res, tokens);
 
