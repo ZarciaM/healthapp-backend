@@ -12,17 +12,21 @@ export const registerSchema = z.object({
   gender: z.enum(["male", "female"], { message: "Genre invalide" }),
   dateOfBirth: z
     .string()
-    .refine((val) => !isNaN(Date.parse(val)), { message: "Date de naissance invalide" })
-    .transform((val) => new Date(val))
-    .refine((date) => {
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format de date invalide (AAAA-MM-JJ)")
+    .transform((val) => {
+      const [y, m, d] = val.split("-").map(Number);
+      return { year: y, month: m, day: d };
+    })
+    .refine(({ year, month, day }) => {
       const today = new Date();
-      const minDate = new Date(
-        today.getFullYear() - 13,
-        today.getMonth(),
-        today.getDate(),
-      );
-      return date <= minDate;
-    }, "Vous devez avoir au moins 13 ans"),
+      const age = today.getFullYear() - year;
+      const monthDiff = today.getMonth() + 1 - month;
+      const dayDiff = today.getDate() - day;
+      const adjustedAge =
+        monthDiff > 0 || (monthDiff === 0 && dayDiff >= 0) ? age : age - 1;
+      return adjustedAge >= 13;
+    }, "Vous devez avoir au moins 13 ans")
+    .transform(({ year, month, day }) => new Date(year, month - 1, day)),
 });
 
 export const loginSchema = z.object({
