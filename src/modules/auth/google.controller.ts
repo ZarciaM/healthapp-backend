@@ -15,7 +15,7 @@ export const googleCallback = async (req: Request, res: Response) => {
 
   setAuthCookies(res, tokens);
 
-  const redirectUrl = user.isProfileComplete
+  const redirectUrl = user.hasBasicProfileInfo
     ? `${env.CLIENT_URL}/auth/callback`
     : `${env.CLIENT_URL}/auth/callback?onboarding=true`;
 

@@ -11,6 +11,8 @@ import { env } from "../../config/env.js";
 import type { AuthTokens } from "./auth.types.js";
 import type { RegisterInput, LoginInput } from "./auth.validation.js";
 
+const MAX_REFRESH_TOKENS = 5;
+
 function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
@@ -22,11 +24,22 @@ export async function issueTokensForUser(
   const refreshToken = generateRefreshToken(userId);
 
   await User.findByIdAndUpdate(userId, {
+    $pull: {
+      refreshTokens: { expiresAt: { $lte: new Date() } },
+    },
     $push: {
       refreshTokens: {
-        token: hashToken(refreshToken),
-        createdAt: new Date(),
-        expiresAt: new Date(Date.now() + parseTimeToMs(env.JWT_REFRESH_EXPIRES_IN)),
+        $each: [
+          {
+            token: hashToken(refreshToken),
+            createdAt: new Date(),
+            expiresAt: new Date(
+              Date.now() + parseTimeToMs(env.JWT_REFRESH_EXPIRES_IN),
+            ),
+          },
+        ],
+        $position: 0,
+        $slice: MAX_REFRESH_TOKENS,
       },
     },
   });
@@ -38,6 +51,7 @@ export async function register(
   data: RegisterInput,
 ): Promise<{ user: unknown; tokens: AuthTokens }> {
   const existing = await User.findOne({ email: data.email });
+
   if (existing) {
     throw ApiError.conflict("Un compte avec cet email existe déjà");
   }
@@ -76,11 +90,13 @@ export async function refreshTokens(
   const { userId } = verifyRefreshToken(incomingRefreshToken);
 
   const user = await User.findById(userId);
+
   if (!user) {
     throw ApiError.unauthorized("Refresh token invalide");
   }
 
   const hashed = hashToken(incomingRefreshToken);
+
   const tokenIndex = user.refreshTokens.findIndex(
     (rt) => rt.token === hashed,
   );
@@ -97,7 +113,9 @@ export async function refreshTokens(
   user.refreshTokens.push({
     token: hashToken(refreshToken),
     createdAt: new Date(),
-    expiresAt: new Date(Date.now() + parseTimeToMs(env.JWT_REFRESH_EXPIRES_IN)),
+    expiresAt: new Date(
+      Date.now() + parseTimeToMs(env.JWT_REFRESH_EXPIRES_IN),
+    ),
   });
 
   await user.save();
@@ -110,6 +128,10 @@ export async function logout(
   refreshToken: string,
 ): Promise<void> {
   await User.findByIdAndUpdate(userId, {
-    $pull: { refreshTokens: { token: hashToken(refreshToken) } },
+    $pull: {
+      refreshTokens: {
+        token: hashToken(refreshToken),
+      },
+    },
   });
 }

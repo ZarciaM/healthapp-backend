@@ -70,9 +70,11 @@ const userSchema = new Schema<IUser, UserModel, IUserMethods>(
       virtuals: true,
       transform(_doc, ret) {
         const transformed = ret as Record<string, unknown>;
+
         delete transformed.password;
         delete transformed.refreshTokens;
         delete transformed.__v;
+
         return transformed;
       },
     },
@@ -96,7 +98,7 @@ userSchema.pre("save", async function () {
 
 userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 
-userSchema.virtual("isProfileComplete").get(function () {
+userSchema.virtual("hasBasicProfileInfo").get(function () {
   return !!(this.gender && this.dateOfBirth);
 });
 

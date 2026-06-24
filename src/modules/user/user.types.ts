@@ -8,7 +8,7 @@ export interface IUser {
   gender?: "male" | "female";
   dateOfBirth?: Date;
   isEmailVerified: boolean;
-  isProfileComplete: boolean;
+  hasBasicProfileInfo: boolean;
   refreshTokens: {
     token: string;
     createdAt: Date;
