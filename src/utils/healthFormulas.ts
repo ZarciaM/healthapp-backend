@@ -106,7 +106,7 @@ export function calculateDailyWaterNeed(params: {
 } {
   const { weightKg, activityLevel, climate } = params;
 
-  const base = calculateBaseWaterNeed(weightKg);
+  let base = calculateBaseWaterNeed(weightKg);
   const activityBonus = getActivityWaterBonus(activityLevel);
   const climateBonus = getClimateWaterBonus(climate);
 
@@ -115,10 +115,12 @@ export function calculateDailyWaterNeed(params: {
   let message: string;
 
   if (totalMl > 5000) {
+    base -= totalMl - 5000;
     totalMl = 5000;
     message =
       "Vos besoins hydriques estimés dépassent un volume raisonnable. Consultez un professionnel de santé pour un suivi personnalisé de votre hydratation.";
   } else if (totalMl < 1500) {
+    base += 1500 - totalMl;
     totalMl = 1500;
     message =
       "Nous avons ajusté cette recommandation à un minimum sain d'hydratation. Consultez un professionnel de santé pour un suivi personnalisé.";
