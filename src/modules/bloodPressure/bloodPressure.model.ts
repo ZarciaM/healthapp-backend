@@ -21,9 +21,9 @@ const bloodPressureEntrySchema = new Schema<IBloodPressureEntry>(
       max: 150,
       validate: {
         validator(this: unknown, value: number) {
-          return value < (this as { systolic: number }).systolic;
+          return value - (this as { systolic: number }).systolic <= 10;
         },
-        message: "La pression diastolique doit être inférieure à la pression systolique",
+        message: "La pression diastolique dépasse anormalement la pression systolique. Vérifiez les valeurs saisies.",
       },
     },
     pulse: {

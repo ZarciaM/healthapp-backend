@@ -27,9 +27,9 @@ export const createBloodPressureEntrySchema = z
       )
       .optional(),
   })
-  .refine((data) => data.diastolic < data.systolic, {
+  .refine((data) => data.diastolic - data.systolic <= 10, {
     message:
-      "La pression diastolique doit être inférieure à la pression systolique",
+      "La pression diastolique dépasse anormalement la pression systolique. Vérifiez les valeurs saisies.",
   });
 
 export type CreateBloodPressureEntryInput = z.infer<
