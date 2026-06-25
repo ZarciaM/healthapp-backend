@@ -3,17 +3,11 @@ import BloodPressureEntry from "./bloodPressure.model.js";
 import type { IBloodPressureEntry } from "./bloodPressure.types.js";
 import { getBloodPressureCategory } from "../../utils/healthFormulas.js";
 import { ApiError } from "../../utils/ApiError.js";
-
-type CreateEntryData = {
-  systolic: number;
-  diastolic: number;
-  pulse: number;
-  recordedAt?: Date;
-};
+import type { CreateBloodPressureEntryInput } from "./bloodPressure.validation.js";
 
 export async function createEntry(
   userId: string,
-  data: CreateEntryData,
+  data: CreateBloodPressureEntryInput,
 ): Promise<IBloodPressureEntry & { message: string }> {
   const { category, severity, message } = getBloodPressureCategory(
     data.systolic,
@@ -78,8 +72,10 @@ export async function getAverages(
     message: string;
   };
 }> {
+  const normalizedDays =
+    Number.isFinite(days) && days > 0 ? Math.min(days, 365) : 7;
   const since = new Date();
-  since.setDate(since.getDate() - days);
+  since.setDate(since.getDate() - normalizedDays);
 
   const result = await BloodPressureEntry.aggregate([
     {
@@ -134,6 +130,10 @@ export async function deleteEntry(
   userId: string,
   entryId: string,
 ): Promise<void> {
+  if (!Types.ObjectId.isValid(entryId)) {
+    throw ApiError.badRequest("ID d'entrée de pression artérielle invalide");
+  }
+
   const entry = await BloodPressureEntry.findById(entryId);
 
   if (!entry) {
