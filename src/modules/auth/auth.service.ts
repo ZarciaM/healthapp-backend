@@ -21,7 +21,12 @@ export async function issueTokensForUser(
   userId: string,
 ): Promise<AuthTokens> {
   const user = await User.findById(userId).select("tokenVersion");
-  const tokenVersion = user?.tokenVersion ?? 0;
+
+  if (!user) {
+    throw ApiError.unauthorized("Utilisateur introuvable");
+  }
+
+  const tokenVersion = user.tokenVersion;
   const accessToken = generateAccessToken(userId, tokenVersion);
   const refreshToken = generateRefreshToken(userId);
 
@@ -139,6 +144,5 @@ export async function logout(
 ): Promise<void> {
   await User.findByIdAndUpdate(userId, {
     $pull: { refreshTokens: { token: hashToken(refreshToken) } },
-    $inc: { tokenVersion: 1 },
   });
 }
