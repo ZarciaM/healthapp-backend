@@ -63,6 +63,16 @@ export async function calculateDailyCalories(
     );
   }
 
+  const hasPartialOverride =
+    overrides !== undefined &&
+    (overrides.weight !== undefined) !== (overrides.height !== undefined);
+
+  if (hasPartialOverride) {
+    throw ApiError.badRequest(
+      "Les paramètres weight et height doivent être fournis ensemble pour surcharger les données du profil",
+    );
+  }
+
   let weight: number;
   let height: number;
   let weightSource: "override" | "latest_entry" | "health_profile";

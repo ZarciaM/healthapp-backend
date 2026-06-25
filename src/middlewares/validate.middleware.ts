@@ -39,7 +39,7 @@ export function validateQuery(schema: ZodSchema) {
       return;
     }
 
-    req.query = result.data as typeof req.query;
+    req.validatedQuery = result.data as Record<string, unknown>;
     next();
   };
 }
