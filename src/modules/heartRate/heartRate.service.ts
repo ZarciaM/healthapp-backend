@@ -25,55 +25,56 @@ function calculateAge(dateOfBirth: Date): number {
 export async function calculateZones(
   userId: string,
   overrideAge?: number,
-  gender?: "male" | "female",
 ): Promise<{
   maxHeartRate: number;
-  maxHeartRateFormula: string;
-  maxHeartRateAlternative: { value: number; formula: string };
+  formula: string;
+  alternative: { maxHeartRate: number; formula: string };
   zones: ReturnType<typeof calculateHeartRateZones>;
+  alternativeZones: ReturnType<typeof calculateHeartRateZones>;
   age: number;
+  gender: string;
   ageSource: "override" | "profile";
 }> {
-  let age: number;
-  let ageSource: "override" | "profile";
-  let resolvedGender: "male" | "female";
+  const user = await User.findById(userId)
+    .select("dateOfBirth gender")
+    .lean();
 
-  if (overrideAge !== undefined && gender !== undefined) {
-    age = overrideAge;
-    ageSource = "override";
-    resolvedGender = gender;
-  } else {
-    const user = await User.findById(userId)
-      .select("dateOfBirth gender")
-      .lean();
-
-    if (!user) {
-      throw ApiError.notFound("Utilisateur introuvable");
-    }
-
-    resolvedGender = gender ?? user.gender ?? "male";
-
-    if (overrideAge !== undefined) {
-      age = overrideAge;
-      ageSource = "override";
-    } else if (user.dateOfBirth) {
-      age = calculateAge(user.dateOfBirth);
-      ageSource = "profile";
-    } else {
-      throw ApiError.badRequest(
-        "Date de naissance manquante dans votre profil. Fournissez un âge ou renseignez votre date de naissance.",
-      );
-    }
+  if (!user) {
+    throw ApiError.notFound("Utilisateur introuvable");
   }
 
-  const {
-    primary: maxHeartRate,
-    formula: maxHeartRateFormula,
-    alternative: maxHeartRateAlternative,
-  } = calculateMaxHeartRate(age, resolvedGender);
-  const zones = calculateHeartRateZones(maxHeartRate);
+  const gender = user.gender ?? "male";
+  let age: number;
+  let ageSource: "override" | "profile";
 
-  return { maxHeartRate, maxHeartRateFormula, maxHeartRateAlternative, zones, age, ageSource };
+  if (overrideAge !== undefined) {
+    age = overrideAge;
+    ageSource = "override";
+  } else if (user.dateOfBirth) {
+    age = calculateAge(user.dateOfBirth);
+    ageSource = "profile";
+  } else {
+    throw ApiError.badRequest(
+      "Date de naissance manquante dans votre profil. Fournissez un âge ou renseignez votre date de naissance.",
+    );
+  }
+
+  const { primary: maxHeartRate, formula, alternative } =
+    calculateMaxHeartRate(age, gender);
+
+  const zones = calculateHeartRateZones(maxHeartRate);
+  const alternativeZones = calculateHeartRateZones(alternative.value);
+
+  return {
+    maxHeartRate,
+    formula,
+    alternative: { maxHeartRate: alternative.value, formula: alternative.formula },
+    zones,
+    alternativeZones,
+    age,
+    gender,
+    ageSource,
+  };
 }
 
 type CreateEntryData = {
