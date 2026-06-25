@@ -1,3 +1,5 @@
+import { ApiError } from "./ApiError.js";
+
 export function calculateBMI(weightKg: number, heightCm: number): number {
   const heightM = heightCm / 100;
   return Math.round((weightKg / (heightM * heightM)) * 10) / 10;
@@ -168,5 +170,54 @@ export function getBMICategory(bmi: number): { category: string; message: string
     category: "obesite",
     message:
       "Votre IMC suggère une obésité. Nous vous recommandons de consulter un professionnel de santé.",
+  };
+}
+
+export function calculateSleepDuration(bedTime: Date, wakeTime: Date): number {
+  if (wakeTime <= bedTime) {
+    throw ApiError.badRequest(
+      "Le réveil doit être postérieur au coucher. Vérifiez les dates fournies."
+    );
+  }
+
+  const diffMs = wakeTime.getTime() - bedTime.getTime();
+  return Math.floor(diffMs / 60000);
+}
+
+export function getSleepQualityLabel(quality: 1 | 2 | 3 | 4 | 5): string {
+  const labels: Record<1 | 2 | 3 | 4 | 5, string> = {
+    1: "Très mauvaise",
+    2: "Mauvaise",
+    3: "Moyenne",
+    4: "Bonne",
+    5: "Excellente",
+  };
+  return labels[quality];
+}
+
+export function getSleepDurationFeedback(durationMinutes: number): {
+  message: string;
+  isHealthyRange: boolean;
+} {
+  if (durationMinutes < 420) {
+    return {
+      message:
+        "Votre sommeil est inférieur aux recommandations habituelles (7 à 9 heures). Un sommeil plus long pourrait être bénéfique.",
+      isHealthyRange: false,
+    };
+  }
+
+  if (durationMinutes <= 540) {
+    return {
+      message:
+        "Votre durée de sommeil se situe dans la plage généralement recommandée pour un adulte. Continuez ainsi.",
+      isHealthyRange: true,
+    };
+  }
+
+  return {
+    message:
+      "Votre durée de sommeil est supérieure aux recommandations habituelles. Cela peut être normal selon vos besoins ou votre âge.",
+    isHealthyRange: false,
   };
 }
