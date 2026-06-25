@@ -6,11 +6,12 @@ import {
   getSleepDurationFeedback,
 } from "../../utils/healthFormulas.js";
 import { ApiError } from "../../utils/ApiError.js";
+import type { SleepQuality } from "./sleep.types.js";
 
 type CreateEntryData = {
   bedTime: Date;
   wakeTime: Date;
-  quality: 1 | 2 | 3 | 4 | 5;
+  quality: SleepQuality;
 };
 
 export async function createEntry(
@@ -47,7 +48,7 @@ export async function getHistory(
     filter.bedTime = dateFilter;
   }
 
-  const limit = Math.min(options?.limit ?? 50, 200);
+  const limit = Math.max(1, Math.min(options?.limit ?? 50, 200));
 
   return SleepEntry.find(filter)
     .sort({ bedTime: -1 })
