@@ -315,3 +315,43 @@ export function getPulseCategory(bpm: number): { category: string; message: stri
       "Votre pouls est plus élevé que la normale au repos. Si cela persiste, une consultation médicale est recommandée.",
   };
 }
+
+export function calculateMaxHeartRate(age: number): number {
+  return Math.round(220 - age);
+}
+
+export function calculateHeartRateZones(maxHeartRate: number): {
+  zone1_warmup: { min: number; max: number; label: string };
+  zone2_fatBurn: { min: number; max: number; label: string };
+  zone3_cardio: { min: number; max: number; label: string };
+  zone4_hardcore: { min: number; max: number; label: string };
+  zone5_peak: { min: number; max: number; label: string };
+} {
+  return {
+    zone1_warmup: {
+      min: Math.round(maxHeartRate * 0.5),
+      max: Math.round(maxHeartRate * 0.6),
+      label: "Échauffement",
+    },
+    zone2_fatBurn: {
+      min: Math.round(maxHeartRate * 0.6),
+      max: Math.round(maxHeartRate * 0.7),
+      label: "Combustion des graisses",
+    },
+    zone3_cardio: {
+      min: Math.round(maxHeartRate * 0.7),
+      max: Math.round(maxHeartRate * 0.8),
+      label: "Cardio",
+    },
+    zone4_hardcore: {
+      min: Math.round(maxHeartRate * 0.8),
+      max: Math.round(maxHeartRate * 0.9),
+      label: "Intensité élevée",
+    },
+    zone5_peak: {
+      min: Math.round(maxHeartRate * 0.9),
+      max: Math.round(maxHeartRate * 1.0),
+      label: "Zone maximale",
+    },
+  };
+}
