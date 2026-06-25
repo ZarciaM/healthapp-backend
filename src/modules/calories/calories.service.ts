@@ -1,11 +1,10 @@
 import User from "../user/user.model.js";
-import HealthProfile from "../healthProfile/healthProfile.model.js";
-import * as bmiService from "../bmi/bmi.service.js";
 import {
   calculateBMR,
   calculateTDEE,
   adjustCaloriesForGoal,
 } from "../../utils/healthFormulas.js";
+import { resolveUserWeight } from "../../utils/resolveUserWeight.js";
 import { ApiError } from "../../utils/ApiError.js";
 
 function calculateAge(dateOfBirth: Date): number {
@@ -50,19 +49,6 @@ export async function calculateDailyCalories(
     );
   }
 
-  const healthProfile = await HealthProfile.findOne({ userId }).lean();
-  if (!healthProfile) {
-    throw ApiError.badRequest(
-      "Veuillez compléter votre profil de santé avant de calculer vos besoins caloriques",
-    );
-  }
-
-  if (!healthProfile.activityLevel || !healthProfile.goal) {
-    throw ApiError.badRequest(
-      "Veuillez compléter le questionnaire santé (niveau d'activité et objectif) avant de calculer vos besoins caloriques",
-    );
-  }
-
   const hasPartialOverride =
     overrides !== undefined &&
     (overrides.weight !== undefined) !== (overrides.height !== undefined);
@@ -73,32 +59,27 @@ export async function calculateDailyCalories(
     );
   }
 
-  let weight: number;
-  let height: number;
-  let weightSource: "override" | "latest_entry" | "health_profile";
+  const { weight, weightSource, healthProfile, latestEntry } =
+    await resolveUserWeight(userId, overrides?.weight);
 
-  if (overrides?.weight !== undefined && overrides?.height !== undefined) {
-    weight = overrides.weight;
+  if (!healthProfile.activityLevel || !healthProfile.goal) {
+    throw ApiError.badRequest(
+      "Veuillez compléter le questionnaire santé (niveau d'activité et objectif) avant de calculer vos besoins caloriques",
+    );
+  }
+
+  let height: number;
+
+  if (overrides?.height !== undefined) {
     height = overrides.height;
-    weightSource = "override";
+  } else if (latestEntry) {
+    height = latestEntry.height;
+  } else if (healthProfile.height !== undefined) {
+    height = healthProfile.height;
   } else {
-    const latestEntry = await bmiService.getLatest(userId);
-    if (latestEntry) {
-      weight = latestEntry.weight;
-      height = latestEntry.height;
-      weightSource = "latest_entry";
-    } else if (
-      healthProfile.currentWeight !== undefined &&
-      healthProfile.height !== undefined
-    ) {
-      weight = healthProfile.currentWeight;
-      height = healthProfile.height;
-      weightSource = "health_profile";
-    } else {
-      throw ApiError.badRequest(
-        "Veuillez compléter votre profil de santé ou enregistrer une pesée avant de calculer vos besoins caloriques",
-      );
-    }
+    throw ApiError.badRequest(
+      "Veuillez compléter votre profil de santé (taille requise) avant de calculer vos besoins caloriques",
+    );
   }
 
   const age = calculateAge(user.dateOfBirth);
