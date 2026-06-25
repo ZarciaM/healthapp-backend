@@ -262,17 +262,17 @@ export function getBloodPressureCategory(
         "Votre tension est légèrement élevée. Continuez à surveiller et maintenez de bonnes habitudes.",
     },
     {
-      match: () => systolic < 120 && diastolic < 80,
-      category: "normale",
-      severity: "normal" as const,
-      message: "Votre tension est dans les valeurs normales.",
-    },
-    {
       match: () => systolic < 90 || diastolic < 60,
       category: "hypotension",
       severity: "elevated" as const,
       message:
         "Votre tension est plus basse que la moyenne. Si vous ressentez des vertiges ou malaises, parlez-en à un professionnel de santé.",
+    },
+    {
+      match: () => systolic < 120 && diastolic < 80,
+      category: "normale",
+      severity: "normal" as const,
+      message: "Votre tension est dans les valeurs normales.",
     },
   ];
 
