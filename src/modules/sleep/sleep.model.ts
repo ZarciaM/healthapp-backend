@@ -1,5 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 import type { ISleepEntry } from "./sleep.types.js";
+import { SLEEP_QUALITY_VALUES } from "./sleep.types.js";
 
 const sleepEntrySchema = new Schema<ISleepEntry>(
   {
@@ -23,7 +24,7 @@ const sleepEntrySchema = new Schema<ISleepEntry>(
     quality: {
       type: Number,
       required: true,
-      enum: [1, 2, 3, 4, 5],
+      enum: SLEEP_QUALITY_VALUES,
     },
     recordedAt: {
       type: Date,

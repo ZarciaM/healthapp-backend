@@ -184,8 +184,10 @@ export function calculateSleepDuration(bedTime: Date, wakeTime: Date): number {
   return Math.floor(diffMs / 60000);
 }
 
-export function getSleepQualityLabel(quality: 1 | 2 | 3 | 4 | 5): string {
-  const labels: Record<1 | 2 | 3 | 4 | 5, string> = {
+import type { SleepQuality } from "../modules/sleep/sleep.types.js";
+
+export function getSleepQualityLabel(quality: SleepQuality): string {
+  const labels: Record<SleepQuality, string> = {
     1: "Très mauvaise",
     2: "Mauvaise",
     3: "Moyenne",

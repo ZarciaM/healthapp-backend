@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SLEEP_QUALITY_VALUES } from "./sleep.types.js";
 
 export const createSleepEntrySchema = z
   .object({
@@ -18,13 +19,15 @@ export const createSleepEntrySchema = z
         (date) => date <= new Date(),
         "La date de réveil ne peut pas être dans le futur",
       ),
-    quality: z.union([
-      z.literal(1),
-      z.literal(2),
-      z.literal(3),
-      z.literal(4),
-      z.literal(5),
-    ]),
+    quality: z.union(
+      SLEEP_QUALITY_VALUES.map((v) => z.literal(v)) as [
+        z.ZodLiteral<1>,
+        z.ZodLiteral<2>,
+        z.ZodLiteral<3>,
+        z.ZodLiteral<4>,
+        z.ZodLiteral<5>,
+      ],
+    ),
   })
   .refine((data) => data.wakeTime > data.bedTime, {
     message: "L'heure de réveil doit être après l'heure de coucher",
