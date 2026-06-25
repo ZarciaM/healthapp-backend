@@ -3,6 +3,10 @@ declare global {
     interface User {
       userId: string;
     }
+
+    interface Request {
+      validatedQuery?: Record<string, unknown>;
+    }
   }
 }
 
