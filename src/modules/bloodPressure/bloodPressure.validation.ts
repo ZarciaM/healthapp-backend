@@ -4,14 +4,17 @@ export const createBloodPressureEntrySchema = z
   .object({
     systolic: z
       .number()
+      .int("La pression systolique doit être un nombre entier")
       .min(50, "La pression systolique doit être comprise entre 50 et 250 mmHg")
       .max(250, "La pression systolique doit être comprise entre 50 et 250 mmHg"),
     diastolic: z
       .number()
+      .int("La pression diastolique doit être un nombre entier")
       .min(30, "La pression diastolique doit être comprise entre 30 et 150 mmHg")
       .max(150, "La pression diastolique doit être comprise entre 30 et 150 mmHg"),
     pulse: z
       .number()
+      .int("Le pouls doit être un nombre entier")
       .min(30, "Le pouls doit être compris entre 30 et 220 bpm")
       .max(220, "Le pouls doit être compris entre 30 et 220 bpm"),
     recordedAt: z
