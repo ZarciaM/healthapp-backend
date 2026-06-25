@@ -38,6 +38,10 @@ export const getHistory = asyncHandler(async (req: Request, res: Response) => {
     to = parsed;
   }
 
+  if (from !== undefined && to !== undefined && from > to) {
+    throw ApiError.badRequest("La date from doit être antérieure à la date to");
+  }
+
   const entries = await sleepService.getHistory(req.user!.userId, {
     limit,
     from,
