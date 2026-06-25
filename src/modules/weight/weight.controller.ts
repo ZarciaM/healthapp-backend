@@ -43,6 +43,12 @@ export const getHistory = asyncHandler(
       to = parsed;
     }
 
+    if (from && to && from > to) {
+      throw ApiError.badRequest(
+        "La date de début (from) doit précéder la date de fin (to)",
+      );
+    }
+
     const entries = await weightService.getWeightHistory(req.user!.userId, {
       limit,
       from,

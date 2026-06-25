@@ -45,7 +45,7 @@ export async function setGoal(
         startingWeight: latest.weight,
       },
     },
-    { upsert: true, new: true },
+    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true },
   );
 
   return goal;
@@ -95,11 +95,15 @@ export async function getProgress(
   let message: string;
 
   if (totalDiff === 0) {
-    percentToGoal = 100;
-    if (Math.abs(weightChange) < 0.1) {
+    const deviation = Math.abs(weightChange);
+    percentToGoal = Math.max(0, Math.round(100 - deviation * 10));
+
+    if (deviation < 0.1) {
       message = "Votre poids est stable et correspond à votre objectif.";
+    } else if (weightChange > 0) {
+      message = `Votre poids a augmenté de ${weightChange.toFixed(1)} kg par rapport à votre objectif.`;
     } else {
-      message = "Votre objectif est identique à votre poids de départ.";
+      message = `Votre poids a diminué de ${(-weightChange).toFixed(1)} kg par rapport à votre objectif.`;
     }
   } else if (goal.targetWeight > goal.startingWeight) {
     const gained = weightChange;
