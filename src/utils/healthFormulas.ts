@@ -74,6 +74,65 @@ export function adjustCaloriesForGoal(
   return { calories, message };
 }
 
+export function calculateBaseWaterNeed(weightKg: number): number {
+  return Math.round(weightKg * 35);
+}
+
+export function getActivityWaterBonus(
+  activityLevel: "sedentary" | "light" | "moderate" | "active" | "very_active"
+): number {
+  const bonuses: Record<string, number> = {
+    sedentary: 0,
+    light: 150,
+    moderate: 350,
+    active: 600,
+    very_active: 900,
+  };
+  return bonuses[activityLevel];
+}
+
+export function getClimateWaterBonus(climate: "normal" | "hot"): number {
+  return climate === "hot" ? 500 : 0;
+}
+
+export function calculateDailyWaterNeed(params: {
+  weightKg: number;
+  activityLevel: "sedentary" | "light" | "moderate" | "active" | "very_active";
+  climate: "normal" | "hot";
+}): {
+  totalMl: number;
+  breakdown: { base: number; activityBonus: number; climateBonus: number };
+  message: string;
+} {
+  const { weightKg, activityLevel, climate } = params;
+
+  const base = calculateBaseWaterNeed(weightKg);
+  const activityBonus = getActivityWaterBonus(activityLevel);
+  const climateBonus = getClimateWaterBonus(climate);
+
+  let totalMl = base + activityBonus + climateBonus;
+
+  let message: string;
+
+  if (totalMl > 5000) {
+    totalMl = 5000;
+    message =
+      "Vos besoins hydriques estimés dépassent un volume raisonnable. Consultez un professionnel de santé pour un suivi personnalisé de votre hydratation.";
+  } else if (totalMl < 1500) {
+    totalMl = 1500;
+    message =
+      "Nous avons ajusté cette recommandation à un minimum sain d'hydratation. Consultez un professionnel de santé pour un suivi personnalisé.";
+  } else {
+    message = "Cette recommandation correspond à vos besoins hydriques quotidiens estimés.";
+  }
+
+  if (climate === "hot") {
+    message += " Pensez à augmenter votre hydratation par temps chaud.";
+  }
+
+  return { totalMl, breakdown: { base, activityBonus, climateBonus }, message };
+}
+
 export function getBMICategory(bmi: number): { category: string; message: string } {
   if (bmi < 18.5) {
     return {
