@@ -12,6 +12,7 @@ import authRoutes from "./modules/auth/auth.routes.js";
 import googleAuthRoutes from "./modules/auth/google.routes.js";
 import healthProfileRoutes from "./modules/healthProfile/healthProfile.routes.js";
 import bmiRoutes from "./modules/bmi/bmi.routes.js";
+import weightRoutes from "./modules/weight/weight.routes.js";
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/auth", googleAuthRoutes);
 app.use("/api/health-profile", healthProfileRoutes);
 app.use("/api/bmi", bmiRoutes);
+app.use("/api/weight", weightRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
