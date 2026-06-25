@@ -28,6 +28,7 @@ export const calculateZonesQuerySchema = z.object({
     .min(1, "L'âge doit être compris entre 1 et 150 ans")
     .max(150, "L'âge doit être compris entre 1 et 150 ans")
     .optional(),
+  gender: z.enum(["male", "female"]).optional(),
 });
 
 export type CreateHeartRateEntryInput = z.infer<

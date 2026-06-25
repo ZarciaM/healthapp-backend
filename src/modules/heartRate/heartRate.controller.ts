@@ -8,10 +8,12 @@ export const getZones = asyncHandler(async (req: Request, res: Response) => {
   const overrideAge = req.query.age !== undefined
     ? Number(req.query.age)
     : undefined;
+  const gender = req.query.gender as "male" | "female" | undefined;
 
   const result = await heartRateService.calculateZones(
     req.user!.userId,
     overrideAge,
+    gender,
   );
 
   sendSuccess(res, 200, "Zones de fréquence cardiaque calculées", { ...result });

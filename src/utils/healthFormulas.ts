@@ -316,8 +316,38 @@ export function getPulseCategory(bpm: number): { category: string; message: stri
   };
 }
 
-export function calculateMaxHeartRate(age: number): number {
-  return Math.round(220 - age);
+/**
+ * Gulati (2010) est la formule la plus utilisée dans l'industrie pour
+ * les femmes mais sa précision est débattue dans la littérature
+ * scientifique récente. Tanaka (2001) est proposée en complément car
+ * plus généralement validée sur une large population.
+ */
+export function calculateMaxHeartRate(
+  age: number,
+  gender: "male" | "female",
+): {
+  primary: number;
+  formula: string;
+  alternative: { value: number; formula: string };
+} {
+  const alternative = {
+    value: Math.round(208 - 0.7 * age),
+    formula: "Tanaka",
+  };
+
+  if (gender === "female") {
+    return {
+      primary: Math.round(206 - 0.88 * age),
+      formula: "Gulati",
+      alternative,
+    };
+  }
+
+  return {
+    primary: Math.round(220 - age),
+    formula: "Fox",
+    alternative,
+  };
 }
 
 export function calculateHeartRateZones(maxHeartRate: number): {

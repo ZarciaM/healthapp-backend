@@ -25,35 +25,55 @@ function calculateAge(dateOfBirth: Date): number {
 export async function calculateZones(
   userId: string,
   overrideAge?: number,
+  gender?: "male" | "female",
 ): Promise<{
   maxHeartRate: number;
+  maxHeartRateFormula: string;
+  maxHeartRateAlternative: { value: number; formula: string };
   zones: ReturnType<typeof calculateHeartRateZones>;
   age: number;
   ageSource: "override" | "profile";
 }> {
   let age: number;
   let ageSource: "override" | "profile";
+  let resolvedGender: "male" | "female";
 
-  if (overrideAge !== undefined) {
+  if (overrideAge !== undefined && gender !== undefined) {
     age = overrideAge;
     ageSource = "override";
+    resolvedGender = gender;
   } else {
-    const user = await User.findById(userId).select("dateOfBirth").lean();
+    const user = await User.findById(userId)
+      .select("dateOfBirth gender")
+      .lean();
 
-    if (!user?.dateOfBirth) {
+    if (!user) {
+      throw ApiError.notFound("Utilisateur introuvable");
+    }
+
+    resolvedGender = gender ?? user.gender ?? "male";
+
+    if (overrideAge !== undefined) {
+      age = overrideAge;
+      ageSource = "override";
+    } else if (user.dateOfBirth) {
+      age = calculateAge(user.dateOfBirth);
+      ageSource = "profile";
+    } else {
       throw ApiError.badRequest(
         "Date de naissance manquante dans votre profil. Fournissez un âge ou renseignez votre date de naissance.",
       );
     }
-
-    age = calculateAge(user.dateOfBirth);
-    ageSource = "profile";
   }
 
-  const maxHeartRate = calculateMaxHeartRate(age);
+  const {
+    primary: maxHeartRate,
+    formula: maxHeartRateFormula,
+    alternative: maxHeartRateAlternative,
+  } = calculateMaxHeartRate(age, resolvedGender);
   const zones = calculateHeartRateZones(maxHeartRate);
 
-  return { maxHeartRate, zones, age, ageSource };
+  return { maxHeartRate, maxHeartRateFormula, maxHeartRateAlternative, zones, age, ageSource };
 }
 
 type CreateEntryData = {
