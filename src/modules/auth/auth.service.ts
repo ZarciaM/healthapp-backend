@@ -20,7 +20,14 @@ function hashToken(token: string): string {
 export async function issueTokensForUser(
   userId: string,
 ): Promise<AuthTokens> {
-  const accessToken = generateAccessToken(userId);
+  const user = await User.findById(userId).select("tokenVersion");
+
+  if (!user) {
+    throw ApiError.unauthorized("Utilisateur introuvable");
+  }
+
+  const tokenVersion = user.tokenVersion;
+  const accessToken = generateAccessToken(userId, tokenVersion);
   const refreshToken = generateRefreshToken(userId);
 
   await User.findByIdAndUpdate(userId, {
@@ -90,33 +97,43 @@ export async function refreshTokens(
   incomingRefreshToken: string,
 ): Promise<AuthTokens> {
   const { userId } = verifyRefreshToken(incomingRefreshToken);
+  const hashed = hashToken(incomingRefreshToken);
 
-  const user = await User.findById(userId);
+  const user = await User.findOneAndUpdate(
+    {
+      _id: userId,
+      "refreshTokens.token": hashed,
+    },
+    {
+      $pull: { refreshTokens: { token: hashed } },
+    },
+    { new: true, projection: { _id: 1, tokenVersion: 1 } },
+  );
+
   if (!user) {
     throw ApiError.unauthorized("Refresh token invalide");
   }
 
-  const hashed = hashToken(incomingRefreshToken);
-  const tokenIndex = user.refreshTokens.findIndex(
-    (rt) => rt.token === hashed,
-  );
+  const accessToken = generateAccessToken(userId, user.tokenVersion);
+  const refreshToken = generateRefreshToken(userId);
 
-  if (tokenIndex === -1) {
-    throw ApiError.unauthorized("Refresh token invalide");
-  }
-
-  user.refreshTokens.splice(tokenIndex, 1);
-
-  const accessToken = generateAccessToken(user._id.toString());
-  const refreshToken = generateRefreshToken(user._id.toString());
-
-  user.refreshTokens.push({
-    token: hashToken(refreshToken),
-    createdAt: new Date(),
-    expiresAt: new Date(Date.now() + parseTimeToMs(env.JWT_REFRESH_EXPIRES_IN)),
+  await User.findByIdAndUpdate(userId, {
+    $push: {
+      refreshTokens: {
+        $each: [
+          {
+            token: hashToken(refreshToken),
+            createdAt: new Date(),
+            expiresAt: new Date(
+              Date.now() + parseTimeToMs(env.JWT_REFRESH_EXPIRES_IN),
+            ),
+          },
+        ],
+        $position: 0,
+        $slice: MAX_REFRESH_TOKENS,
+      },
+    },
   });
-
-  await user.save();
 
   return { accessToken, refreshToken };
 }

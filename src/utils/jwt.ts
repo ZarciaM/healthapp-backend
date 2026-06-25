@@ -3,8 +3,8 @@ import { env } from "../config/env.js";
 import { ApiError } from "./ApiError.js";
 import type { JwtPayload } from "../modules/auth/auth.types.js";
 
-export function generateAccessToken(userId: string): string {
-  return jwt.sign({ userId }, env.JWT_ACCESS_SECRET, {
+export function generateAccessToken(userId: string, tokenVersion?: number): string {
+  return jwt.sign({ userId, tokenVersion }, env.JWT_ACCESS_SECRET, {
     expiresIn: env.JWT_ACCESS_EXPIRES_IN,
   } as jwt.SignOptions);
 }

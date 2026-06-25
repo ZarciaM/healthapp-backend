@@ -58,6 +58,10 @@ const userSchema = new Schema<IUser, UserModel, IUserMethods>(
     dateOfBirth: {
       type: Date,
     },
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
     isEmailVerified: {
       type: Boolean,
       default: false,

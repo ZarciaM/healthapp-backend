@@ -9,6 +9,7 @@ export interface IUser {
   dateOfBirth?: Date;
   isEmailVerified: boolean;
   hasBasicProfileInfo: boolean;
+  tokenVersion: number;
   refreshTokens: {
     token: string;
     createdAt: Date;
