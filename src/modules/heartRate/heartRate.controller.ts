@@ -5,16 +5,21 @@ import { ApiError } from "../../utils/ApiError.js";
 import * as heartRateService from "./heartRate.service.js";
 
 export const getZones = asyncHandler(async (req: Request, res: Response) => {
-  const overrideAge = req.query.age !== undefined
-    ? Number(req.query.age)
-    : undefined;
+  let overrideAge: number | undefined;
+  if (req.query.age !== undefined) {
+    const parsed = Number(req.query.age);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 150) {
+      throw ApiError.badRequest("L'âge doit être un entier compris entre 1 et 150");
+    }
+    overrideAge = parsed;
+  }
 
   const result = await heartRateService.calculateZones(
     req.user!.userId,
     overrideAge,
   );
 
-  sendSuccess(res, 200, "Zones de fréquence cardiaque calculées", { ...result });
+  sendSuccess(res, 200, "Zones de fréquence cardiaque calculées", result);
 });
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
