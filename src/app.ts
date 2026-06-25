@@ -15,6 +15,7 @@ import bmiRoutes from "./modules/bmi/bmi.routes.js";
 import weightRoutes from "./modules/weight/weight.routes.js";
 import caloriesRoutes from "./modules/calories/calories.routes.js";
 import waterRoutes from "./modules/water/water.routes.js";
+import sleepRoutes from "./modules/sleep/sleep.routes.js";
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use("/api/bmi", bmiRoutes);
 app.use("/api/weight", weightRoutes);
 app.use("/api/calories", caloriesRoutes);
 app.use("/api/water", waterRoutes);
+app.use("/api/sleep", sleepRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
