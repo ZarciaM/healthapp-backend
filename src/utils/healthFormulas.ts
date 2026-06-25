@@ -78,17 +78,21 @@ export function calculateBaseWaterNeed(weightKg: number): number {
   return Math.round(weightKg * 35);
 }
 
+const WATER_ACTIVITY_BONUSES: Record<
+  "sedentary" | "light" | "moderate" | "active" | "very_active",
+  number
+> = {
+  sedentary: 0,
+  light: 150,
+  moderate: 350,
+  active: 600,
+  very_active: 900,
+};
+
 export function getActivityWaterBonus(
-  activityLevel: "sedentary" | "light" | "moderate" | "active" | "very_active"
+  activityLevel: string,
 ): number {
-  const bonuses: Record<string, number> = {
-    sedentary: 0,
-    light: 150,
-    moderate: 350,
-    active: 600,
-    very_active: 900,
-  };
-  return bonuses[activityLevel];
+  return WATER_ACTIVITY_BONUSES[activityLevel as keyof typeof WATER_ACTIVITY_BONUSES] ?? 0;
 }
 
 export function getClimateWaterBonus(climate: "normal" | "hot"): number {
@@ -106,25 +110,25 @@ export function calculateDailyWaterNeed(params: {
 } {
   const { weightKg, activityLevel, climate } = params;
 
-  let base = calculateBaseWaterNeed(weightKg);
+  const base = calculateBaseWaterNeed(weightKg);
   const activityBonus = getActivityWaterBonus(activityLevel);
   const climateBonus = getClimateWaterBonus(climate);
 
-  let totalMl = base + activityBonus + climateBonus;
+  const rawTotal = base + activityBonus + climateBonus;
 
+  let totalMl: number;
   let message: string;
 
-  if (totalMl > 5000) {
-    base -= totalMl - 5000;
+  if (rawTotal > 5000) {
     totalMl = 5000;
     message =
       "Vos besoins hydriques estimés dépassent un volume raisonnable. Consultez un professionnel de santé pour un suivi personnalisé de votre hydratation.";
-  } else if (totalMl < 1500) {
-    base += 1500 - totalMl;
+  } else if (rawTotal < 1500) {
     totalMl = 1500;
     message =
       "Nous avons ajusté cette recommandation à un minimum sain d'hydratation. Consultez un professionnel de santé pour un suivi personnalisé.";
   } else {
+    totalMl = rawTotal;
     message = "Cette recommandation correspond à vos besoins hydriques quotidiens estimés.";
   }
 

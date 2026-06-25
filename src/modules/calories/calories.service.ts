@@ -74,8 +74,12 @@ export async function calculateDailyCalories(
     height = overrides.height;
   } else if (latestEntry) {
     height = latestEntry.height;
+  } else if (healthProfile.height !== undefined) {
+    height = healthProfile.height;
   } else {
-    height = healthProfile.height!;
+    throw ApiError.badRequest(
+      "Veuillez compléter votre profil de santé (taille requise) avant de calculer vos besoins caloriques",
+    );
   }
 
   const age = calculateAge(user.dateOfBirth);
