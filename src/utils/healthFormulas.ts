@@ -223,3 +223,95 @@ export function getSleepDurationFeedback(durationMinutes: number): {
     isHealthyRange: false,
   };
 }
+
+export function getBloodPressureCategory(
+  systolic: number,
+  diastolic: number,
+): {
+  category: string;
+  severity: "normal" | "elevated" | "high" | "critical";
+  message: string;
+} {
+  const categories = [
+    {
+      match: () => systolic >= 180 || diastolic >= 120,
+      category: "crise_hypertensive",
+      severity: "critical" as const,
+      message:
+        "Ces valeurs nécessitent une attention médicale rapide. Si vous ressentez des symptômes (maux de tête sévères, essoufflement, douleur thoracique), contactez immédiatement un service d'urgence.",
+    },
+    {
+      match: () => (systolic >= 140 && systolic <= 179) || (diastolic >= 90 && diastolic <= 119),
+      category: "hypertension_stade_2",
+      severity: "high" as const,
+      message:
+        "Vos valeurs suggèrent une hypertension de stade 2. Une consultation médicale est recommandée.",
+    },
+    {
+      match: () => (systolic >= 130 && systolic <= 139) || (diastolic >= 80 && diastolic <= 89),
+      category: "hypertension_stade_1",
+      severity: "high" as const,
+      message:
+        "Vos valeurs suggèrent une hypertension de stade 1. Nous vous recommandons d'en parler à un professionnel de santé.",
+    },
+    {
+      match: () => systolic >= 120 && systolic <= 129 && diastolic < 80,
+      category: "elevee",
+      severity: "elevated" as const,
+      message:
+        "Votre tension est légèrement élevée. Continuez à surveiller et maintenez de bonnes habitudes.",
+    },
+    {
+      match: () => systolic < 120 && diastolic < 80,
+      category: "normale",
+      severity: "normal" as const,
+      message: "Votre tension est dans les valeurs normales.",
+    },
+    {
+      match: () => systolic < 90 || diastolic < 60,
+      category: "hypotension",
+      severity: "elevated" as const,
+      message:
+        "Votre tension est plus basse que la moyenne. Si vous ressentez des vertiges ou malaises, parlez-en à un professionnel de santé.",
+    },
+  ];
+
+  for (const entry of categories) {
+    if (entry.match()) {
+      return {
+        category: entry.category,
+        severity: entry.severity,
+        message: entry.message,
+      };
+    }
+  }
+
+  return {
+    category: "normale",
+    severity: "normal" as const,
+    message: "Votre tension est dans les valeurs normales.",
+  };
+}
+
+export function getPulseCategory(bpm: number): { category: string; message: string } {
+  if (bpm < 60) {
+    return {
+      category: "bradycardie",
+      message:
+        "Votre pouls est inférieur à la normale au repos. Si vous ressentez des symptômes (fatigue, étourdissements), parlez-en à un professionnel de santé.",
+    };
+  }
+
+  if (bpm <= 100) {
+    return {
+      category: "normal",
+      message: "Votre pouls est dans les valeurs normales au repos.",
+    };
+  }
+
+  return {
+    category: "tachycardie",
+    message:
+      "Votre pouls est plus élevé que la normale au repos. Si cela persiste, une consultation médicale est recommandée.",
+  };
+}
