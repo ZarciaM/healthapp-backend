@@ -61,11 +61,17 @@ export const getLatest = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getAverages = asyncHandler(async (req: Request, res: Response) => {
+  const MAX_DAYS = 365;
   let days = 7;
   if (req.query.days !== undefined) {
     const parsed = Number(req.query.days);
     if (!Number.isInteger(parsed) || parsed < 1) {
       throw ApiError.badRequest("Le paramètre days doit être un entier positif");
+    }
+    if (parsed > MAX_DAYS) {
+      throw ApiError.badRequest(
+        `Le paramètre days ne peut pas dépasser ${MAX_DAYS}`,
+      );
     }
     days = parsed;
   }
