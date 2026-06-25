@@ -255,18 +255,18 @@ export function getBloodPressureCategory(
         "Vos valeurs suggèrent une hypertension de stade 1. Nous vous recommandons d'en parler à un professionnel de santé.",
     },
     {
-      match: () => systolic >= 120 && systolic <= 129 && diastolic < 80,
-      category: "elevee",
-      severity: "elevated" as const,
-      message:
-        "Votre tension est légèrement élevée. Continuez à surveiller et maintenez de bonnes habitudes.",
-    },
-    {
       match: () => systolic < 90 || diastolic < 60,
       category: "hypotension",
       severity: "elevated" as const,
       message:
         "Votre tension est plus basse que la moyenne. Si vous ressentez des vertiges ou malaises, parlez-en à un professionnel de santé.",
+    },
+    {
+      match: () => systolic >= 120 && systolic <= 129 && diastolic < 80,
+      category: "elevee",
+      severity: "elevated" as const,
+      message:
+        "Votre tension est légèrement élevée. Continuez à surveiller et maintenez de bonnes habitudes.",
     },
     {
       match: () => systolic < 120 && diastolic < 80,
