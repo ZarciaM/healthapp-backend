@@ -385,3 +385,139 @@ export function calculateHeartRateZones(maxHeartRate: number): {
     },
   };
 }
+
+/**
+ * Calcule le pourcentage de graisse corporelle avec la formule US Navy
+ * (Hodgdon & Beckett, 1984, Naval Health Research Center).
+ *
+ * ATTENTION — CONVERSION D'UNITÉS :
+ * La formule officielle originale est définie en POUCES. Toutes les mesures
+ * d'entrée sont en centimètres (cohérence avec les autres modules : IMC,
+ * poids, taille). On convertit donc les centimètres en pouces (÷ 2.54)
+ * avant d'appliquer la formule, plutôt que d'utiliser des coefficients
+ * métriques alternatifs moins universellement vérifiés.
+ *
+ * Homme  : BF% = 86.010 × log10(waist - neck) - 70.041 × log10(height) + 36.76
+ * Femme  : BF% = 163.205 × log10(waist + hip - neck) - 97.684 × log10(height) - 78.387
+ */
+export function calculateBodyFatPercentage(params: {
+  gender: "male" | "female";
+  heightCm: number;
+  neckCm: number;
+  waistCm: number;
+  hipCm?: number;
+}): number {
+  const CM_TO_INCH = 2.54;
+
+  const heightIn = params.heightCm / CM_TO_INCH;
+  const neckIn = params.neckCm / CM_TO_INCH;
+  const waistIn = params.waistCm / CM_TO_INCH;
+
+  if (params.gender === "female") {
+    if (params.hipCm === undefined) {
+      throw ApiError.badRequest(
+        "Le tour de hanches (hipCm) est requis pour le calcul du pourcentage de graisse corporelle chez la femme.",
+      );
+    }
+    const hipIn = params.hipCm / CM_TO_INCH;
+    const bf =
+      163.205 * Math.log10(waistIn + hipIn - neckIn) -
+      97.684 * Math.log10(heightIn) -
+      78.387;
+    return Math.round(bf * 10) / 10;
+  }
+
+  const bf =
+    86.01 * Math.log10(waistIn - neckIn) -
+    70.041 * Math.log10(heightIn) +
+    36.76;
+  return Math.round(bf * 10) / 10;
+}
+
+/**
+ * Catégorise un pourcentage de graisse corporelle selon les seuils standard
+ * de l'American Council on Exercise (ACE).
+ *
+ * Les catégories sont stables pour la plupart des adultes. Le paramètre age
+ * est accepté pour le profil de l'utilisateur (tracabilité) ; un léger
+ * ajustement de +0.5 % par décennie après 30 ans est appliqué pour tenir
+ * compte de l'augmentation naturelle de la masse grasse avec l'âge
+ * (Gallagher et al., 2000).
+ */
+export function getBodyFatCategory(
+  bodyFatPercent: number,
+  gender: "male" | "female",
+  age: number,
+): { category: string; message: string } {
+  const ageAdjustment = Math.max(0, Math.ceil((age - 30) / 10)) * 0.5;
+
+  if (gender === "female") {
+    if (bodyFatPercent <= 13 + ageAdjustment) {
+      return {
+        category: "essentiel",
+        message:
+          "Votre taux de graisse corporelle correspond à la graisse essentielle, le minimum nécessaire pour la santé. Ce niveau est très bas et rare chez la population générale.",
+      };
+    }
+    if (bodyFatPercent <= 20 + ageAdjustment) {
+      return {
+        category: "athletique",
+        message:
+          "Votre taux de graisse corporelle se situe dans la plage athlétique, typique des sportives régulières et des athlètes.",
+      };
+    }
+    if (bodyFatPercent <= 24 + ageAdjustment) {
+      return {
+        category: "fitness",
+        message:
+          "Votre taux de graisse corporelle correspond à la catégorie fitness, considérée comme bonne pour la santé générale.",
+      };
+    }
+    if (bodyFatPercent <= 31 + ageAdjustment) {
+      return {
+        category: "moyen",
+        message:
+          "Votre taux de graisse corporelle se situe dans la moyenne de la population. Maintenir de bonnes habitudes alimentaires et une activité physique régulière peut aider à rester dans cette zone.",
+      };
+    }
+    return {
+      category: "au_dessus_de_la_moyenne",
+      message:
+        "Votre taux de graisse corporelle est au-dessus de la moyenne recommandée. Une activité physique régulière et une alimentation équilibrée peuvent vous aider à atteindre un taux plus favorable pour la santé.",
+    };
+  }
+
+  if (bodyFatPercent <= 5 + ageAdjustment) {
+    return {
+      category: "essentiel",
+      message:
+        "Votre taux de graisse corporelle correspond à la graisse essentielle, le minimum nécessaire pour la santé. Ce niveau est très bas et rare chez la population générale.",
+    };
+  }
+  if (bodyFatPercent <= 13 + ageAdjustment) {
+    return {
+      category: "athletique",
+      message:
+        "Votre taux de graisse corporelle se situe dans la plage athlétique, typique des sportifs réguliers et des athlètes.",
+    };
+  }
+  if (bodyFatPercent <= 17 + ageAdjustment) {
+    return {
+      category: "fitness",
+      message:
+        "Votre taux de graisse corporelle correspond à la catégorie fitness, considérée comme bonne pour la santé générale.",
+    };
+  }
+  if (bodyFatPercent <= 24 + ageAdjustment) {
+    return {
+      category: "moyen",
+      message:
+        "Votre taux de graisse corporelle se situe dans la moyenne de la population. Maintenir de bonnes habitudes alimentaires et une activité physique régulière peut aider à rester dans cette zone.",
+    };
+  }
+  return {
+    category: "au_dessus_de_la_moyenne",
+    message:
+      "Votre taux de graisse corporelle est au-dessus de la moyenne recommandée. Une activité physique régulière et une alimentation équilibrée peuvent vous aider à atteindre un taux plus favorable pour la santé.",
+  };
+}
