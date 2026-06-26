@@ -47,7 +47,13 @@ export async function createEntry(
     );
   }
 
-  const gender = user.gender ?? "male";
+  if (!user.gender) {
+    throw ApiError.badRequest(
+      "Genre manquant dans votre profil. Veuillez renseigner votre genre.",
+    );
+  }
+
+  const gender = user.gender;
 
   if (gender === "female" && data.hipCm === undefined) {
     throw ApiError.badRequest(
