@@ -434,6 +434,90 @@ export function calculateBodyFatPercentage(params: {
   return Math.round(bf * 10) / 10;
 }
 
+function daysBetween(a: Date, b: Date): number {
+  const diffMs = Math.abs(b.getTime() - a.getTime());
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+export function calculateCycleLength(
+  cycleStartDates: Date[],
+): { averageLength: number | null; isRegular: boolean; confidenceLevel: "low" | "medium" | "high" } {
+  if (cycleStartDates.length < 2) {
+    return { averageLength: null, isRegular: false, confidenceLevel: "low" };
+  }
+
+  const lengths: number[] = [];
+  for (let i = 1; i < cycleStartDates.length; i++) {
+    lengths.push(daysBetween(cycleStartDates[i - 1], cycleStartDates[i]));
+  }
+
+  const sum = lengths.reduce((a, b) => a + b, 0);
+  const averageLength = Math.round((sum / lengths.length) * 10) / 10;
+
+  const min = Math.min(...lengths);
+  const max = Math.max(...lengths);
+  const isRegular = max - min <= 7;
+
+  const numCycles = lengths.length;
+  let confidenceLevel: "low" | "medium" | "high";
+  if (numCycles < 3 || !isRegular) {
+    confidenceLevel = "low";
+  } else if (numCycles <= 5) {
+    confidenceLevel = "medium";
+  } else {
+    confidenceLevel = "high";
+  }
+
+  return { averageLength, isRegular, confidenceLevel };
+}
+
+export function predictNextPeriod(
+  lastPeriodStart: Date,
+  averageCycleLength: number,
+  confidenceLevel: "low" | "medium" | "high",
+): { estimatedDate: Date; rangeStart: Date; rangeEnd: Date } {
+  const estimatedDate = addDays(lastPeriodStart, averageCycleLength);
+
+  const offset = confidenceLevel === "high" ? 2 : confidenceLevel === "medium" ? 4 : 7;
+
+  return {
+    estimatedDate,
+    rangeStart: addDays(estimatedDate, -offset),
+    rangeEnd: addDays(estimatedDate, offset),
+  };
+}
+
+export function predictFertileWindow(
+  lastPeriodStart: Date,
+  averageCycleLength: number,
+  confidenceLevel: "low" | "medium" | "high",
+): {
+  estimatedOvulationDate: Date;
+  fertileWindowStart: Date;
+  fertileWindowEnd: Date;
+  confidenceLevel: string;
+  disclaimer: string;
+} {
+  const estimatedOvulationDate = addDays(lastPeriodStart, averageCycleLength - 14);
+
+  const offset = confidenceLevel === "high" ? 2 : confidenceLevel === "medium" ? 4 : 7;
+
+  return {
+    estimatedOvulationDate,
+    fertileWindowStart: addDays(estimatedOvulationDate, -5 - offset),
+    fertileWindowEnd: addDays(estimatedOvulationDate, 1 + offset),
+    confidenceLevel,
+    disclaimer:
+      "Cette estimation est basée sur un calcul calendaire et ne constitue pas une méthode fiable de contraception ou de conception. Les cycles naturels varient et l'ovulation peut survenir à des dates différentes de cette estimation. Consultez un professionnel de santé pour des méthodes de suivi de fertilité plus précises si nécessaire.",
+  };
+}
+
 /**
  * Catégorise un pourcentage de graisse corporelle selon les seuils standard
  * de l'American Council on Exercise (ACE).
