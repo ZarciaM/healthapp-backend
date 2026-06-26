@@ -18,6 +18,7 @@ import waterRoutes from "./modules/water/water.routes.js";
 import sleepRoutes from "./modules/sleep/sleep.routes.js";
 import bloodPressureRoutes from "./modules/bloodPressure/bloodPressure.routes.js";
 import heartRateRoutes from "./modules/heartRate/heartRate.routes.js";
+import bodyFatRoutes from "./modules/bodyFat/bodyFat.routes.js";
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use("/api/water", waterRoutes);
 app.use("/api/sleep", sleepRoutes);
 app.use("/api/blood-pressure", bloodPressureRoutes);
 app.use("/api/heart-rate", heartRateRoutes);
+app.use("/api/body-fat", bodyFatRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
