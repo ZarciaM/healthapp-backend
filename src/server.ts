@@ -3,9 +3,11 @@ import app from "./app.js";
 import { env } from "./config/env.js";
 import { connectDB } from "./config/db.js";
 import logger from "./utils/logger.js";
+import { startScheduler } from "./modules/notifications/scheduler.service.js";
 
 async function start(): Promise<void> {
   await connectDB();
+  startScheduler();
 
   const server = app.listen(env.PORT, () => {
     logger.info(`Server running on port ${env.PORT} in ${env.NODE_ENV} mode`);
