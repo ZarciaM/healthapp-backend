@@ -1,0 +1,19 @@
+import type { Types } from "mongoose";
+
+export type SharingScope = "menstrual_cycle";
+
+export type SharingStatus = "pending" | "accepted" | "revoked" | "declined";
+
+export interface IDataShare {
+  ownerId: Types.ObjectId;
+  partnerId?: Types.ObjectId;
+  partnerEmail: string;
+  scope: SharingScope;
+  status: SharingStatus;
+  invitationToken: string;
+  invitedAt: Date;
+  respondedAt?: Date;
+  revokedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
