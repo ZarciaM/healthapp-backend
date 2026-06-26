@@ -62,6 +62,10 @@ const userSchema = new Schema<IUser, UserModel, IUserMethods>(
       type: Number,
       default: 0,
     },
+    timezone: {
+      type: String,
+      default: "UTC",
+    },
     isEmailVerified: {
       type: Boolean,
       default: false,

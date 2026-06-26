@@ -51,3 +51,17 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
 
   sendSuccess(res, 200, "Profil récupéré", { user });
 });
+
+export const updateTimezone = asyncHandler(async (req: Request, res: Response) => {
+  const user = await User.findByIdAndUpdate(
+    req.user!.userId,
+    { timezone: req.body.timezone },
+    { new: true },
+  );
+
+  if (!user) {
+    throw ApiError.unauthorized("Utilisateur introuvable");
+  }
+
+  sendSuccess(res, 200, "Fuseau horaire mis à jour", { user });
+});
