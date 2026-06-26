@@ -1,0 +1,112 @@
+import { Request, Response } from "express";
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import { sendSuccess } from "../../utils/ApiResponse.js";
+import { ApiError } from "../../utils/ApiError.js";
+import * as heartRateService from "./heartRate.service.js";
+
+export const getZones = asyncHandler(async (req: Request, res: Response) => {
+  let overrideAge: number | undefined;
+  if (req.query.age !== undefined) {
+    const parsed = Number(req.query.age);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 150) {
+      throw ApiError.badRequest("L'âge doit être un entier compris entre 1 et 150");
+    }
+    overrideAge = parsed;
+  }
+
+  const result = await heartRateService.calculateZones(
+    req.user!.userId,
+    overrideAge,
+  );
+
+  sendSuccess(res, 200, "Zones de fréquence cardiaque calculées", result);
+});
+
+export const create = asyncHandler(async (req: Request, res: Response) => {
+  const entry = await heartRateService.createEntry(req.user!.userId, req.body);
+
+  sendSuccess(res, 201, "Entrée de fréquence cardiaque créée", { entry });
+});
+
+export const getHistory = asyncHandler(async (req: Request, res: Response) => {
+  let limit: number | undefined;
+  if (req.query.limit !== undefined) {
+    const parsed = Number(req.query.limit);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      throw ApiError.badRequest("Le paramètre limit doit être un entier positif");
+    }
+    limit = parsed;
+  }
+
+  let from: Date | undefined;
+  if (req.query.from !== undefined) {
+    const parsed = new Date(req.query.from as string);
+    if (isNaN(parsed.getTime())) {
+      throw ApiError.badRequest("La date from est invalide");
+    }
+    from = parsed;
+  }
+
+  let to: Date | undefined;
+  if (req.query.to !== undefined) {
+    const parsed = new Date(req.query.to as string);
+    if (isNaN(parsed.getTime())) {
+      throw ApiError.badRequest("La date to est invalide");
+    }
+    to = parsed;
+  }
+
+  if (from !== undefined && to !== undefined && from > to) {
+    throw ApiError.badRequest("La date from doit être antérieure à la date to");
+  }
+
+  const entries = await heartRateService.getHistory(req.user!.userId, {
+    limit,
+    from,
+    to,
+  });
+
+  sendSuccess(res, 200, "Historique récupéré", { entries });
+});
+
+export const getLatest = asyncHandler(async (req: Request, res: Response) => {
+  const entry = await heartRateService.getLatest(req.user!.userId);
+
+  sendSuccess(res, 200, "Dernière entrée de fréquence cardiaque", { entry });
+});
+
+export const getAverages = asyncHandler(async (req: Request, res: Response) => {
+  const MAX_DAYS = 365;
+  let days = 7;
+  if (req.query.days !== undefined) {
+    const parsed = Number(req.query.days);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      throw ApiError.badRequest("Le paramètre days doit être un entier positif");
+    }
+    if (parsed > MAX_DAYS) {
+      throw ApiError.badRequest(
+        `Le paramètre days ne peut pas dépasser ${MAX_DAYS}`,
+      );
+    }
+    days = parsed;
+  }
+
+  const context = req.query.context as string | undefined;
+
+  const averages = await heartRateService.getAverages(
+    req.user!.userId,
+    days,
+    context,
+  );
+
+  sendSuccess(res, 200, "Moyennes de fréquence cardiaque", { averages });
+});
+
+export const remove = asyncHandler(async (req: Request, res: Response) => {
+  await heartRateService.deleteEntry(
+    req.user!.userId,
+    req.params.id as string,
+  );
+
+  sendSuccess(res, 200, "Entrée de fréquence cardiaque supprimée");
+});
