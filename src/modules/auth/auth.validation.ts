@@ -34,5 +34,17 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Mot de passe requis"),
 });
 
+const ianaTimeZones = Intl.supportedValuesOf("timeZone");
+
+export const updateTimezoneSchema = z.object({
+  timezone: z
+    .string()
+    .trim()
+    .min(1, "timezone is required")
+    .refine((tz) => ianaTimeZones.includes(tz), {
+      message: "Invalid IANA timezone identifier",
+    }),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;

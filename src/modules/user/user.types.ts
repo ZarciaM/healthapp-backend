@@ -7,6 +7,7 @@ export interface IUser {
   lastName: string;
   gender?: "male" | "female";
   dateOfBirth?: Date;
+  timezone: string;
   isEmailVerified: boolean;
   hasBasicProfileInfo: boolean;
   tokenVersion: number;
