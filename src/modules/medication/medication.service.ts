@@ -65,15 +65,24 @@ export async function updateReminder(
   const parsed = parseDateFields(data);
 
   // Validate endDate > startDate against the stored values
-  const effectiveStartDate = parsed.startDate ?? reminder.startDate;
-  const effectiveEndDate = parsed.endDate ?? reminder.endDate;
-  if (effectiveEndDate && effectiveStartDate && effectiveEndDate <= effectiveStartDate) {
-    throw ApiError.badRequest("endDate must be after startDate");
+  // (null endDate means the user explicitly clears it — skip check)
+  if (parsed.endDate !== null) {
+    const effectiveStartDate = parsed.startDate ?? reminder.startDate;
+    const effectiveEndDate = parsed.endDate ?? reminder.endDate;
+    if (effectiveEndDate && effectiveStartDate && effectiveEndDate <= effectiveStartDate) {
+      throw ApiError.badRequest("endDate must be after startDate");
+    }
+  }
+
+  const updateOp: Record<string, unknown> = { $set: parsed };
+  if (parsed.endDate === null) {
+    updateOp.$unset = { endDate: "" };
+    delete (updateOp.$set as Record<string, unknown>).endDate;
   }
 
   const updated = await MedicationReminder.findByIdAndUpdate(
     reminderId,
-    { $set: parsed },
+    updateOp,
     { new: true, runValidators: true },
   );
 

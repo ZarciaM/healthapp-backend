@@ -18,15 +18,15 @@ export async function sendEmail(params: {
     });
 
     if (error) {
-      logger.error(`Failed to send email to ${params.to} | subject: ${params.subject} | error: ${error.message}`);
+      logger.error(`Failed to send email | error: ${error.message}`);
       return { success: false, error: error.message };
     }
 
-    logger.info(`Email sent successfully to ${params.to} | subject: ${params.subject}`);
+    logger.info("Email sent successfully");
     return { success: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    logger.error(`Failed to send email to ${params.to} | subject: ${params.subject} | error: ${message}`);
+    logger.error(`Failed to send email | error: ${message}`);
     return { success: false, error: message };
   }
 }
