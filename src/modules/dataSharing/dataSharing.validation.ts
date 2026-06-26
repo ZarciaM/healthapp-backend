@@ -3,6 +3,7 @@ import { z } from "zod";
 export const createInvitationSchema = z.object({
   partnerEmail: z
     .string()
+    .trim()
     .email("partnerEmail must be a valid email address"),
   scope: z
     .enum(["menstrual_cycle"], {

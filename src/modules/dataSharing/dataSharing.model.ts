@@ -51,5 +51,12 @@ const dataShareSchema = new Schema<IDataShare>(
 
 dataShareSchema.index({ ownerId: 1, scope: 1 });
 dataShareSchema.index({ partnerId: 1, scope: 1, status: 1 });
+dataShareSchema.index(
+  { ownerId: 1, partnerEmail: 1, scope: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: { $in: ["pending", "accepted"] } },
+  },
+);
 
 export default mongoose.model<IDataShare>("DataShare", dataShareSchema);

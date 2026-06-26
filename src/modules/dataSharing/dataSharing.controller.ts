@@ -23,7 +23,7 @@ export const accept = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const decline = asyncHandler(async (req: Request, res: Response) => {
-  await dataSharingService.declineInvitation(req.body.invitationToken);
+  await dataSharingService.declineInvitation(req.body.invitationToken, req.user!.userId);
 
   sendSuccess(res, 200, "Invitation declined");
 });

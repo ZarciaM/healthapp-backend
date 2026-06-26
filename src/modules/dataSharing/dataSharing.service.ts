@@ -32,30 +32,23 @@ export async function createInvitation(
     throw ApiError.badRequest("You cannot invite yourself");
   }
 
-  const existing = await DataShare.findOne({
-    ownerId: new Types.ObjectId(ownerId),
-    partnerEmail: normalizedEmail,
-    scope,
-    status: { $in: ["pending", "accepted"] },
-  }).lean();
-
-  if (existing) {
-    throw ApiError.conflict(
-      existing.status === "pending"
-        ? "An invitation has already been sent to this email address"
-        : "This user already has access to this data",
-    );
-  }
-
   const invitationToken = generateInvitationToken();
 
-  const share = await DataShare.create({
-    ownerId: new Types.ObjectId(ownerId),
-    partnerEmail: normalizedEmail,
-    scope,
-    status: "pending",
-    invitationToken,
-  });
+  let shareDoc;
+  try {
+    shareDoc = await DataShare.create({
+      ownerId: new Types.ObjectId(ownerId),
+      partnerEmail: normalizedEmail,
+      scope,
+      status: "pending",
+      invitationToken,
+    });
+  } catch (err: unknown) {
+    if ((err as Record<string, unknown>)?.code === 11000) {
+      throw ApiError.conflict("An active invitation already exists for this email and scope");
+    }
+    throw err;
+  }
 
   const acceptUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/sharing/accept`;
 
@@ -71,10 +64,11 @@ export async function createInvitation(
   });
 
   if (!emailResult.success) {
-    logger.error(`Failed to send invitation email to ${normalizedEmail} for scope ${scope}`);
+    await DataShare.findByIdAndDelete(shareDoc._id);
+    throw ApiError.internal("Failed to send invitation email");
   }
 
-  return share.toObject();
+  return shareDoc.toObject();
 }
 
 export async function acceptInvitation(
@@ -100,8 +94,8 @@ export async function acceptInvitation(
     throw ApiError.forbidden("This invitation was sent to a different email address");
   }
 
-  const updated = await DataShare.findByIdAndUpdate(
-    share._id,
+  const updated = await DataShare.findOneAndUpdate(
+    { _id: share._id, status: "pending" },
     {
       $set: {
         partnerId: new Types.ObjectId(acceptingUserId),
@@ -113,7 +107,7 @@ export async function acceptInvitation(
   );
 
   if (!updated) {
-    throw ApiError.notFound("Invitation not found");
+    throw ApiError.conflict("This invitation has already been processed");
   }
 
   const owner = await User.findById(share.ownerId).select("email firstName").lean();
@@ -128,14 +122,17 @@ export async function acceptInvitation(
     });
 
     if (!emailResult.success) {
-      logger.error(`Failed to send acceptance notification to ${owner.email}`);
+      logger.error(`Failed to send acceptance notification for share ${share._id}`);
     }
   }
 
   return updated.toObject();
 }
 
-export async function declineInvitation(invitationToken: string): Promise<void> {
+export async function declineInvitation(
+  invitationToken: string,
+  acceptingUserId: string,
+): Promise<void> {
   const share = await DataShare.findOne({ invitationToken }).lean();
 
   if (!share) {
@@ -146,9 +143,24 @@ export async function declineInvitation(invitationToken: string): Promise<void> 
     throw ApiError.badRequest(`This invitation has already been ${share.status}`);
   }
 
-  await DataShare.findByIdAndUpdate(share._id, {
-    $set: { status: "declined" as SharingStatus, respondedAt: new Date() },
-  });
+  const decliningUser = await User.findById(acceptingUserId).select("email").lean();
+  if (!decliningUser) {
+    throw ApiError.notFound("User not found");
+  }
+
+  if (decliningUser.email.toLowerCase() !== share.partnerEmail) {
+    throw ApiError.forbidden("This invitation was sent to a different email address");
+  }
+
+  const updated = await DataShare.findOneAndUpdate(
+    { _id: share._id, status: "pending" },
+    { $set: { status: "declined" as SharingStatus, respondedAt: new Date() } },
+    { new: true },
+  );
+
+  if (!updated) {
+    throw ApiError.conflict("This invitation has already been processed");
+  }
 }
 
 export async function revokeShare(ownerId: string, shareId: string): Promise<void> {
@@ -179,7 +191,7 @@ export async function revokeShare(ownerId: string, shareId: string): Promise<voi
       });
 
       if (!emailResult.success) {
-        logger.error(`Failed to send revocation email to ${partner.email}`);
+        logger.error(`Failed to send revocation email for share ${share._id}`);
       }
     }
   }
