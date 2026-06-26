@@ -58,6 +58,31 @@ const envSchema = z.object({
     .string()
     .url("GOOGLE_CALLBACK_URL must be a valid URL"),
 
+  RESEND_API_KEY: z
+    .string()
+    .trim()
+    .min(1, "RESEND_API_KEY is required"),
+
+  EMAIL_FROM: z
+    .string()
+    .trim()
+    .min(1, "EMAIL_FROM is required"),
+
+  VAPID_PUBLIC_KEY: z
+    .string()
+    .trim()
+    .min(1, "VAPID_PUBLIC_KEY is required"),
+
+  VAPID_PRIVATE_KEY: z
+    .string()
+    .trim()
+    .min(1, "VAPID_PRIVATE_KEY is required"),
+
+  VAPID_SUBJECT: z
+    .string()
+    .trim()
+    .min(1, "VAPID_SUBJECT is required"),
+
 });
 
 const parsed = envSchema.safeParse(process.env);
