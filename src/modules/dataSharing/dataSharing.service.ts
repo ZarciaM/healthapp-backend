@@ -16,6 +16,14 @@ function generateInvitationToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
+function getAcceptUrl(): string {
+  const baseUrl = process.env.CLIENT_URL;
+  if (!baseUrl) {
+    throw new Error("CLIENT_URL environment variable is required");
+  }
+  return `${baseUrl}/sharing/accept`;
+}
+
 export async function createInvitation(
   ownerId: string,
   partnerEmail: string,
@@ -51,8 +59,6 @@ export async function createInvitation(
     throw err;
   }
 
-  const acceptUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/sharing/accept`;
-
   const emailResult = await sendEmail({
     to: normalizedEmail,
     subject: `${owner.firstName} ${owner.lastName} has invited you to view their health data`,
@@ -60,7 +66,7 @@ export async function createInvitation(
       inviterFirstName: owner.firstName,
       scope,
       token: invitationToken,
-      acceptUrl,
+      acceptUrl: getAcceptUrl(),
     }),
   });
 
@@ -96,8 +102,6 @@ export async function resendInvitation(
     throw ApiError.notFound("Owner not found");
   }
 
-  const acceptUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/sharing/accept`;
-
   const emailResult = await sendEmail({
     to: share.partnerEmail,
     subject: `${owner.firstName} ${owner.lastName} has invited you to view their health data`,
@@ -105,7 +109,7 @@ export async function resendInvitation(
       inviterFirstName: owner.firstName,
       scope: share.scope,
       token: share.invitationToken,
-      acceptUrl,
+      acceptUrl: getAcceptUrl(),
     }),
   });
 

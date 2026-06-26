@@ -4,6 +4,8 @@ export type SharingScope = "menstrual_cycle";
 
 export type SharingStatus = "pending" | "accepted" | "revoked" | "declined";
 
+export type SanitizedShare = Omit<IDataShare, "invitationToken">;
+
 export interface IDataShare {
   ownerId: Types.ObjectId;
   partnerId?: Types.ObjectId;

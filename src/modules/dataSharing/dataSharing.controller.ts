@@ -1,16 +1,15 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { sendSuccess } from "../../utils/ApiResponse.js";
-import type { IDataShare } from "./dataSharing.types.js";
+import type { IDataShare, SanitizedShare } from "./dataSharing.types.js";
 import * as dataSharingService from "./dataSharing.service.js";
 
-function sanitizeShare(share: IDataShare): IDataShare {
-  const sanitized = { ...share } as Record<string, unknown>;
-  delete sanitized.invitationToken;
-  return sanitized as unknown as IDataShare;
+function sanitizeShare(share: IDataShare): SanitizedShare {
+  const { invitationToken: _, ...rest } = share;
+  return rest;
 }
 
-function sanitizeShares(shares: IDataShare[]): IDataShare[] {
+function sanitizeShares(shares: IDataShare[]): SanitizedShare[] {
   return shares.map(sanitizeShare);
 }
 
