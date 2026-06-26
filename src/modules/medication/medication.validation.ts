@@ -76,10 +76,4 @@ export const updateMedicationReminderSchema = z.object({
   notifyByPush: z
     .boolean()
     .optional(),
-}).refine(
-  (data) => {
-    if (!data.startDate || !data.endDate) return true;
-    return new Date(data.endDate) > new Date(data.startDate);
-  },
-  { message: "endDate must be after startDate", path: ["endDate"] },
-);
+});

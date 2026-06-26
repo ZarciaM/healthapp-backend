@@ -32,13 +32,6 @@ const medicationReminderSchema = new Schema<IMedicationReminder>(
     },
     endDate: {
       type: Date,
-      validate: {
-        validator: function (this: IMedicationReminder, v: Date) {
-          if (!v) return true;
-          return v > this.startDate;
-        },
-        message: "endDate must be after startDate",
-      },
     },
     isActive: {
       type: Boolean,

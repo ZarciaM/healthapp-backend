@@ -64,6 +64,13 @@ export async function updateReminder(
 
   const parsed = parseDateFields(data);
 
+  // Validate endDate > startDate against the stored values
+  const effectiveStartDate = parsed.startDate ?? reminder.startDate;
+  const effectiveEndDate = parsed.endDate ?? reminder.endDate;
+  if (effectiveEndDate && effectiveStartDate && effectiveEndDate <= effectiveStartDate) {
+    throw ApiError.badRequest("endDate must be after startDate");
+  }
+
   const updated = await MedicationReminder.findByIdAndUpdate(
     reminderId,
     { $set: parsed },

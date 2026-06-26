@@ -7,7 +7,7 @@ import { startScheduler } from "./modules/notifications/scheduler.service.js";
 
 async function start(): Promise<void> {
   await connectDB();
-  startScheduler();
+  const schedulerTask = startScheduler();
 
   const server = app.listen(env.PORT, () => {
     logger.info(`Server running on port ${env.PORT} in ${env.NODE_ENV} mode`);
@@ -20,6 +20,8 @@ async function start(): Promise<void> {
     exitCode = 0
   ): Promise<void> => {
     logger.info(`${signal} received — shutting down gracefully`);
+
+    schedulerTask.stop();
 
     const timer = setTimeout(() => {
       logger.error("Shutdown timed out — forcing exit");

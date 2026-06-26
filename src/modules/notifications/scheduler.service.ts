@@ -1,4 +1,4 @@
-import cron from "node-cron";
+import cron, { type ScheduledTask } from "node-cron";
 import logger from "../../utils/logger.js";
 import { findDueReminders } from "../medication/medication.service.js";
 import { sendEmail } from "./email.service.js";
@@ -6,10 +6,10 @@ import { sendPushNotification } from "./push.service.js";
 import { medicationReminderEmailTemplate } from "./templates/medicationReminder.template.js";
 import PushSubscription from "./pushSubscription.model.js";
 
-export function startScheduler(): void {
+export function startScheduler(): ScheduledTask {
   logger.info("Starting medication reminder scheduler");
 
-  cron.schedule("* * * * *", async () => {
+  const task = cron.schedule("* * * * *", async () => {
     try {
       const dueReminders = await findDueReminders();
 
@@ -33,7 +33,7 @@ export function startScheduler(): void {
 
           if (!emailResult.success) {
             logger.error(
-              `Failed to send email reminder to ${user.email} for ${reminder.medicationName}`,
+              `Failed to send email reminder for user ${reminder.userId} | medication: ${reminder.medicationName}`,
             );
           }
         }
@@ -57,7 +57,7 @@ export function startScheduler(): void {
 
             if (pushResult.isExpiredSubscription) {
               await PushSubscription.deleteOne({ _id: sub._id });
-              logger.warn(`Removed expired push subscription for ${user.email}`);
+              logger.warn(`Removed expired push subscription for user ${reminder.userId}`);
             }
           }
         }
@@ -66,5 +66,7 @@ export function startScheduler(): void {
       const message = err instanceof Error ? err.message : String(err);
       logger.error(`Scheduler error: ${message}`);
     }
-  });
+  }, { noOverlap: true });
+
+  return task;
 }

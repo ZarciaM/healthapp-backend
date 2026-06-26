@@ -17,7 +17,7 @@ export const subscribe = asyncHandler(async (req: Request, res: Response) => {
     { endpoint, keys },
   );
 
-  sendSuccess(res, 201, "Abonnement push enregistré", { subscription });
+  sendSuccess(res, 201, "Push subscription registered", { subscription });
 });
 
 export const unsubscribe = asyncHandler(async (req: Request, res: Response) => {
@@ -25,9 +25,9 @@ export const unsubscribe = asyncHandler(async (req: Request, res: Response) => {
 
   await pushSubscriptionService.removeSubscription(req.user!.userId, endpoint);
 
-  sendSuccess(res, 200, "Abonnement push supprimé");
+  sendSuccess(res, 200, "Push subscription removed");
 });
 
 export const getVapidPublicKey = asyncHandler(async (_req: Request, res: Response) => {
-  sendSuccess(res, 200, "Clé publique VAPID", { publicKey: env.VAPID_PUBLIC_KEY });
+  sendSuccess(res, 200, "VAPID public key", { publicKey: env.VAPID_PUBLIC_KEY });
 });

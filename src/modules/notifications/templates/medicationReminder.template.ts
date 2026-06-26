@@ -1,9 +1,20 @@
+function escapeHtml(raw: string): string {
+  return raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 export function medicationReminderEmailTemplate(params: {
   firstName: string;
   medicationName: string;
   dosage?: string;
 }): string {
-  const dosageText = params.dosage ? ` (${params.dosage})` : "";
+  const firstName = escapeHtml(params.firstName);
+  const medicationName = escapeHtml(params.medicationName);
+  const dosageText = params.dosage ? ` (${escapeHtml(params.dosage)})` : "";
 
   return `
 <!DOCTYPE html>
@@ -24,12 +35,12 @@ export function medicationReminderEmailTemplate(params: {
           </tr>
           <tr>
             <td style="padding: 32px;">
-              <p style="font-size: 16px; color: #333333;">Hello <strong>${params.firstName}</strong>,</p>
+              <p style="font-size: 16px; color: #333333;">Hello <strong>${firstName}</strong>,</p>
               <p style="font-size: 16px; color: #333333;">
                 This is a friendly reminder to take your medication:
               </p>
               <p style="font-size: 18px; color: #4f46e5; font-weight: bold; text-align: center; padding: 16px; background-color: #f0f0ff; border-radius: 6px;">
-                ${params.medicationName}${dosageText}
+                ${medicationName}${dosageText}
               </p>
               <p style="font-size: 16px; color: #333333;">
                 Please take it as prescribed by your healthcare provider.
