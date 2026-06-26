@@ -18,7 +18,9 @@ const cycleSymptomValues = [
   "dizziness",
 ] as const satisfies CycleSymptom[];
 
-const dateString = z.string().pipe(z.coerce.date());
+const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+const dateString = z.string().regex(dateRegex, "Date must be in YYYY-MM-DD format").pipe(z.coerce.date());
 
 export const createCycleEntrySchema = z
   .object({

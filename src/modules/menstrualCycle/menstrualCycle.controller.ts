@@ -12,9 +12,28 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
 
 export const getHistory = asyncHandler(async (req: Request, res: Response) => {
   const ownerId = req.params.ownerId as string;
-  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
-  const fromDate = req.query.fromDate ? new Date(req.query.fromDate as string) : undefined;
-  const toDate = req.query.toDate ? new Date(req.query.toDate as string) : undefined;
+
+  let limit: number | undefined;
+  if (req.query.limit !== undefined) {
+    const parsed = parseInt(req.query.limit as string, 10);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      throw ApiError.badRequest("limit must be a positive integer");
+    }
+    limit = parsed;
+  }
+
+  const rawFromDate = req.query.fromDate as string | undefined;
+  const rawToDate = req.query.toDate as string | undefined;
+
+  if (rawFromDate && isNaN(Date.parse(rawFromDate))) {
+    throw ApiError.badRequest("fromDate must be a valid date string");
+  }
+  if (rawToDate && isNaN(Date.parse(rawToDate))) {
+    throw ApiError.badRequest("toDate must be a valid date string");
+  }
+
+  const fromDate = rawFromDate ? new Date(rawFromDate) : undefined;
+  const toDate = rawToDate ? new Date(rawToDate) : undefined;
 
   const entries = await cycleService.getHistory(ownerId, {
     limit,
