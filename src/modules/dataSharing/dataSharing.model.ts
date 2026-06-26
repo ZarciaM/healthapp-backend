@@ -33,6 +33,10 @@ const dataShareSchema = new Schema<IDataShare>(
       required: true,
       unique: true,
     },
+    emailSentSuccessfully: {
+      type: Boolean,
+      default: false,
+    },
     invitedAt: {
       type: Date,
       default: Date.now,

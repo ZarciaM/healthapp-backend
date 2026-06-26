@@ -11,6 +11,7 @@ export interface IDataShare {
   scope: SharingScope;
   status: SharingStatus;
   invitationToken: string;
+  emailSentSuccessfully: boolean;
   invitedAt: Date;
   respondedAt?: Date;
   revokedAt?: Date;

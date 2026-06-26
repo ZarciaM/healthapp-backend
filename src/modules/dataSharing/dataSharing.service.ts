@@ -42,6 +42,7 @@ export async function createInvitation(
       scope,
       status: "pending",
       invitationToken,
+      emailSentSuccessfully: false,
     });
   } catch (err: unknown) {
     if ((err as Record<string, unknown>)?.code === 11000) {
@@ -63,12 +64,60 @@ export async function createInvitation(
     }),
   });
 
-  if (!emailResult.success) {
-    await DataShare.findByIdAndDelete(shareDoc._id);
-    throw ApiError.internal("Failed to send invitation email");
+  if (emailResult.success) {
+    await DataShare.findByIdAndUpdate(shareDoc._id, { $set: { emailSentSuccessfully: true } });
+  } else {
+    logger.error(`Failed to send invitation email for share ${shareDoc._id}`);
   }
 
-  return shareDoc.toObject();
+  return (await DataShare.findById(shareDoc._id).lean())!;
+}
+
+export async function resendInvitation(
+  ownerId: string,
+  shareId: string,
+): Promise<{ emailSentSuccessfully: boolean }> {
+  const share = await DataShare.findById(shareId).lean();
+
+  if (!share) {
+    throw ApiError.notFound("Share not found");
+  }
+
+  if (share.ownerId.toString() !== ownerId) {
+    throw ApiError.forbidden("You can only resend your own invitations");
+  }
+
+  if (share.status !== "pending") {
+    throw ApiError.badRequest("Cannot resend an invitation that is no longer pending");
+  }
+
+  const owner = await User.findById(ownerId).select("firstName lastName email").lean();
+  if (!owner) {
+    throw ApiError.notFound("Owner not found");
+  }
+
+  const acceptUrl = `${process.env.CLIENT_URL || "http://localhost:5173"}/sharing/accept`;
+
+  const emailResult = await sendEmail({
+    to: share.partnerEmail,
+    subject: `${owner.firstName} ${owner.lastName} has invited you to view their health data`,
+    html: invitationEmailTemplate({
+      inviterFirstName: owner.firstName,
+      scope: share.scope,
+      token: share.invitationToken,
+      acceptUrl,
+    }),
+  });
+
+  const emailSentSuccessfully = emailResult.success;
+
+  await DataShare.findByIdAndUpdate(shareId, { $set: { emailSentSuccessfully } });
+
+  if (!emailSentSuccessfully) {
+    logger.error(`Failed to resend invitation email for share ${shareId}`);
+  }
+
+  return { emailSentSuccessfully };
 }
 
 export async function acceptInvitation(
