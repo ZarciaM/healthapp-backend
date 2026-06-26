@@ -14,16 +14,23 @@ export async function createEntry(
     notes?: string;
   },
 ): Promise<ICycleEntry> {
-  const entry = await CycleEntry.create({
-    userId: new Types.ObjectId(userId),
-    periodStartDate: data.periodStartDate,
-    periodEndDate: data.periodEndDate,
-    flow: data.flow,
-    symptoms: data.symptoms,
-    notes: data.notes,
-  });
+  try {
+    const entry = await CycleEntry.create({
+      userId: new Types.ObjectId(userId),
+      periodStartDate: data.periodStartDate,
+      periodEndDate: data.periodEndDate,
+      flow: data.flow,
+      symptoms: data.symptoms,
+      notes: data.notes,
+    });
 
-  return entry.toObject();
+    return entry.toObject();
+  } catch (err: unknown) {
+    if ((err as Record<string, unknown>)?.code === 11000) {
+      throw ApiError.conflict("A cycle entry already exists for this date");
+    }
+    throw err;
+  }
 }
 
 export async function getHistory(

@@ -48,6 +48,6 @@ const cycleEntrySchema = new Schema<ICycleEntry>(
   },
 );
 
-cycleEntrySchema.index({ userId: 1, periodStartDate: -1 });
+cycleEntrySchema.index({ userId: 1, periodStartDate: 1 }, { unique: true });
 
 export default mongoose.model<ICycleEntry>("CycleEntry", cycleEntrySchema);
