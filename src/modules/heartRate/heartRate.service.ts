@@ -59,6 +59,17 @@ export async function calculateZones(
     );
   }
 
+  if (
+    !Number.isFinite(age) ||
+    !Number.isInteger(age) ||
+    age <= 0 ||
+    age > 150
+  ) {
+    throw ApiError.badRequest(
+      "Âge invalide. L'âge doit être un entier compris entre 1 et 150.",
+    );
+  }
+
   const { primary: maxHeartRate, formula, alternative } =
     calculateMaxHeartRate(age, gender);
 
@@ -87,12 +98,13 @@ export async function createEntry(
   userId: string,
   data: CreateEntryData,
 ): Promise<IHeartRateEntry & { message: string }> {
-  const { category, message } = getPulseCategory(data.bpm);
   const context = data.context ?? "resting";
+  let { category, message } = getPulseCategory(data.bpm);
 
   let finalMessage = message;
 
   if (context === "after_exercise" && data.bpm > 100) {
+    category = "post_exercise_elevation";
     finalMessage =
       "Votre pouls est élevé après l'exercice, ce qui est normal. Il devrait revenir à la normale au repos.";
   } else if (context === "after_exercise") {
@@ -126,10 +138,11 @@ export async function getHistory(
     filter.recordedAt = dateFilter;
   }
 
-  const limit = Math.max(1, Math.min(options?.limit ?? 50, 200));
+  const rawLimit = options?.limit;
+  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(rawLimit!, 200)) : 50;
 
   return HeartRateEntry.find(filter)
-    .sort({ recordedAt: -1 })
+    .sort({ recordedAt: -1, _id: -1 })
     .limit(limit)
     .lean();
 }
@@ -138,7 +151,7 @@ export async function getLatest(
   userId: string,
 ): Promise<IHeartRateEntry | null> {
   return HeartRateEntry.findOne({ userId: new Types.ObjectId(userId) })
-    .sort({ recordedAt: -1 })
+    .sort({ recordedAt: -1, _id: -1 })
     .lean();
 }
 
