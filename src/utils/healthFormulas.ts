@@ -538,7 +538,8 @@ export function calculateGestationalAge(
   referenceDate: Date = new Date(),
 ): GestationalAgeResult {
   const msPerDay = 1000 * 60 * 60 * 24;
-  const remainingDays = (dueDate.getTime() - referenceDate.getTime()) / msPerDay;
+  const diffMs = dueDate.getTime() - referenceDate.getTime();
+  const remainingDays = Math.round(diffMs / msPerDay);
   const totalDays = 280 - remainingDays;
 
   let anomaly: GestationalAgeResult["anomaly"] = null;
@@ -551,7 +552,7 @@ export function calculateGestationalAge(
 
   const clamped = Math.max(0, totalDays);
   const weeks = Math.floor(clamped / 7);
-  const days = Math.round(clamped % 7);
+  const days = clamped % 7;
 
   let trimester: 1 | 2 | 3;
   if (weeks <= 13) {

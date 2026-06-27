@@ -37,7 +37,11 @@ export const getProgress = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const close = asyncHandler(async (req: Request, res: Response) => {
-  const profile = await pregnancyService.closePregnancy(req.user!.userId, req.params.id as string);
+  const profile = await pregnancyService.closePregnancy(
+    req.user!.userId,
+    req.params.id as string,
+    req.body.outcome,
+  );
 
   sendSuccess(res, 200, "Pregnancy profile closed", { pregnancy: profile });
 });

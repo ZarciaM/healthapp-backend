@@ -33,6 +33,9 @@ const pregnancyProfileSchema = new Schema<IPregnancyProfile>(
   },
 );
 
-pregnancyProfileSchema.index({ userId: 1, isActive: 1 }, { unique: true });
+pregnancyProfileSchema.index(
+  { userId: 1, isActive: 1 },
+  { unique: true, partialFilterExpression: { isActive: true } },
+);
 
 export default mongoose.model<IPregnancyProfile>("PregnancyProfile", pregnancyProfileSchema);

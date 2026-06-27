@@ -141,7 +141,7 @@ export const pregnancyMilestones: MilestoneEntry[] = [
     title: "Début de l'ossification",
     description:
       "Les os du squelette commencent à durcir, en particulier ceux du crâne et des membres. La peau est encore fine et transparente, mais elle va commencer à s'épaissir.",
-    trimester: 2,
+    trimester: 1,
   },
   {
     weekNumber: 14,

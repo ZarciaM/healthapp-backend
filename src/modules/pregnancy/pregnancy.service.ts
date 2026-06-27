@@ -1,6 +1,6 @@
 import { Types } from "mongoose";
 import PregnancyProfile from "./pregnancy.model.js";
-import type { IPregnancyProfile, CalculationMethod } from "./pregnancy.types.js";
+import type { IPregnancyProfile, CalculationMethod, PregnancyOutcome } from "./pregnancy.types.js";
 import {
   calculateDueDateFromLMP,
   calculateDueDateFromConception,
@@ -49,7 +49,9 @@ export async function createProfile(
     return profile.toObject();
   } catch (err: unknown) {
     if ((err as Record<string, unknown>)?.code === 11000) {
-      throw ApiError.conflict("A pregnancy is already being tracked");
+      throw ApiError.conflict(
+      "Une grossesse est déjà en cours de suivi, terminez-la avant d'en démarrer une nouvelle",
+    );
     }
     throw err;
   }
@@ -108,7 +110,7 @@ export async function getProgress(userId: string): Promise<GetProgressResult> {
 export async function closePregnancy(
   userId: string,
   profileId: string,
-  _outcome?: string,
+  outcome?: PregnancyOutcome,
 ): Promise<IPregnancyProfile> {
   const profile = await PregnancyProfile.findById(profileId);
 
@@ -121,6 +123,9 @@ export async function closePregnancy(
   }
 
   profile.isActive = false;
+  if (outcome) {
+    profile.outcome = outcome;
+  }
   await profile.save();
 
   return profile.toObject();

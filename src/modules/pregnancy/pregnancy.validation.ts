@@ -1,8 +1,17 @@
 import { z } from "zod";
 
-const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+function isValidCalendarDate(val: string): boolean {
+  const match = val.match(/^\d{4}-\d{2}-\d{2}$/);
+  if (!match) return false;
+  const [y, m, d] = val.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
+}
 
-const dateString = z.string().regex(dateRegex, "Date must be in YYYY-MM-DD format").pipe(z.coerce.date());
+const dateString = z
+  .string()
+  .refine(isValidCalendarDate, "Invalid or impossible date")
+  .pipe(z.coerce.date());
 
 function daysAgo(date: Date): number {
   return (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24);
@@ -22,6 +31,9 @@ export const createPregnancyProfileSchema = z
           message: "lastMenstrualPeriod is required when calculationMethod is 'lmp'",
           path: ["lastMenstrualPeriod"],
         });
+        return;
+      }
+      if (!(data.lastMenstrualPeriod instanceof Date)) {
         return;
       }
       if (data.lastMenstrualPeriod > new Date()) {
@@ -57,6 +69,9 @@ export const createPregnancyProfileSchema = z
           message: "conceptionDate is required when calculationMethod is 'conception'",
           path: ["conceptionDate"],
         });
+        return;
+      }
+      if (!(data.conceptionDate instanceof Date)) {
         return;
       }
       if (data.conceptionDate > new Date()) {
