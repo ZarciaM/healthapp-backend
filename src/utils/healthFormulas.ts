@@ -518,6 +518,53 @@ export function predictFertileWindow(
   };
 }
 
+export function calculateDueDateFromLMP(lastMenstrualPeriod: Date): Date {
+  return addDays(lastMenstrualPeriod, 280);
+}
+
+export function calculateDueDateFromConception(conceptionDate: Date): Date {
+  return addDays(conceptionDate, 266);
+}
+
+export type GestationalAgeResult = {
+  weeks: number;
+  days: number;
+  trimester: 1 | 2 | 3;
+  anomaly: "post_term" | "pre_conception" | null;
+};
+
+export function calculateGestationalAge(
+  dueDate: Date,
+  referenceDate: Date = new Date(),
+): GestationalAgeResult {
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const remainingDays = (dueDate.getTime() - referenceDate.getTime()) / msPerDay;
+  const totalDays = 280 - remainingDays;
+
+  let anomaly: GestationalAgeResult["anomaly"] = null;
+
+  if (totalDays < 0) {
+    anomaly = "pre_conception";
+  } else if (remainingDays < -14) {
+    anomaly = "post_term";
+  }
+
+  const clamped = Math.max(0, totalDays);
+  const weeks = Math.floor(clamped / 7);
+  const days = Math.round(clamped % 7);
+
+  let trimester: 1 | 2 | 3;
+  if (weeks <= 13) {
+    trimester = 1;
+  } else if (weeks <= 27) {
+    trimester = 2;
+  } else {
+    trimester = 3;
+  }
+
+  return { weeks, days, trimester, anomaly };
+}
+
 /**
  * Catégorise un pourcentage de graisse corporelle selon les seuils standard
  * de l'American Council on Exercise (ACE).
