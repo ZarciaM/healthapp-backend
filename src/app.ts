@@ -23,6 +23,7 @@ import pushSubscriptionRoutes from "./modules/notifications/pushSubscription.rou
 import medicationRoutes from "./modules/medication/medication.routes.js";
 import dataSharingRoutes from "./modules/dataSharing/dataSharing.routes.js";
 import menstrualCycleRoutes from "./modules/menstrualCycle/menstrualCycle.routes.js";
+import pregnancyRoutes from "./modules/pregnancy/pregnancy.routes.js";
 
 const app = express();
 
@@ -63,6 +64,7 @@ app.use("/api/push-subscriptions", pushSubscriptionRoutes);
 app.use("/api/medications", medicationRoutes);
 app.use("/api/data-sharing", dataSharingRoutes);
 app.use("/api/menstrual-cycle", menstrualCycleRoutes);
+app.use("/api/pregnancy", pregnancyRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
