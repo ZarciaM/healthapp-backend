@@ -11,33 +11,37 @@ export async function createOrUpdateReminder(
   data: CreateHydrationReminderInput,
 ): Promise<IHydrationReminder> {
   let times: string[];
-  let intervalConfig: IHydrationReminder["intervalConfig"];
 
   if (data.mode === "fixed_times") {
     times = data.times!;
-    intervalConfig = undefined;
   } else {
     times = generateIntervalTimes(
       data.intervalConfig!.startTime,
       data.intervalConfig!.endTime,
       data.intervalConfig!.intervalHours,
     );
-    intervalConfig = data.intervalConfig;
+  }
+
+  const update: Record<string, unknown> = {
+    $set: {
+      userId: new Types.ObjectId(userId),
+      mode: data.mode,
+      times,
+      isActive: true,
+      notifyByEmail: data.notifyByEmail ?? true,
+      notifyByPush: data.notifyByPush ?? true,
+    },
+  };
+
+  if (data.mode === "interval") {
+    (update.$set as Record<string, unknown>).intervalConfig = data.intervalConfig;
+  } else {
+    update.$unset = { intervalConfig: "" };
   }
 
   const reminder = await HydrationReminder.findOneAndUpdate(
     { userId: new Types.ObjectId(userId) },
-    {
-      $set: {
-        userId: new Types.ObjectId(userId),
-        mode: data.mode,
-        times,
-        intervalConfig,
-        isActive: true,
-        notifyByEmail: data.notifyByEmail ?? true,
-        notifyByPush: data.notifyByPush ?? true,
-      },
-    },
+    update,
     { upsert: true, new: true, runValidators: true },
   );
 
@@ -88,9 +92,10 @@ export async function deleteReminder(userId: string): Promise<void> {
 
 export async function findDueReminders(
   currentTime: string,
+  simulatedNow?: Date,
 ): Promise<Array<{ reminder: IHydrationReminder; user: { email: string; firstName: string } }>> {
   const [hours, minutes] = currentTime.split(":").map(Number);
-  const now = new Date();
+  const now = simulatedNow ?? new Date();
   now.setUTCHours(hours, minutes, 0, 0);
 
   return findDueRemindersByTimezone(HydrationReminder, {}, now);
