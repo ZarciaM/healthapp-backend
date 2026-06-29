@@ -17,13 +17,23 @@ export async function findDueRemindersByTimezone<T extends { userId: Types.Objec
   const activeUserIds = await model.distinct("userId", activeFilter);
   if (activeUserIds.length === 0) return [];
 
-  const distinctTimezones = await User.distinct("timezone", {
+  const distinctTimezones: (string | null)[] = await User.distinct("timezone", {
     _id: { $in: activeUserIds },
   });
 
+  const usersWithoutTz = await User.countDocuments({
+    _id: { $in: activeUserIds },
+    timezone: { $exists: false },
+  });
+
+  const tzBuckets = [...distinctTimezones];
+  if (usersWithoutTz > 0 && !tzBuckets.includes(null)) {
+    tzBuckets.push(null);
+  }
+
   const results: DueReminderResult<T>[] = [];
 
-  for (const tz of distinctTimezones) {
+  for (const tz of tzBuckets) {
     const effectiveTz: string = tz ?? "UTC";
     const localHHMM = formatInTimeZone(now, effectiveTz, "HH:mm");
 
