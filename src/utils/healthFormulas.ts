@@ -653,3 +653,43 @@ export function getBodyFatCategory(
       "Votre taux de graisse corporelle est au-dessus de la moyenne recommandée. Une activité physique régulière et une alimentation équilibrée peuvent vous aider à atteindre un taux plus favorable pour la santé.",
   };
 }
+
+export function generateIntervalTimes(
+  startTime: string,
+  endTime: string,
+  intervalHours: number,
+): string[] {
+  if (intervalHours <= 0) {
+    throw ApiError.badRequest("L'intervalle doit être supérieur à zéro.");
+  }
+
+  const [startHour, startMin] = startTime.split(":").map(Number);
+  const [endHour, endMin] = endTime.split(":").map(Number);
+
+  const startTotalMinutes = startHour * 60 + startMin;
+  const endTotalMinutes = endHour * 60 + endMin;
+
+  if (endTotalMinutes <= startTotalMinutes) {
+    throw ApiError.badRequest(
+      "L'heure de fin doit être postérieure à l'heure de début.",
+    );
+  }
+
+  const intervalMinutes = intervalHours * 60;
+  const MAX_TIMES = 20;
+  const times: string[] = [];
+  let currentMinutes = startTotalMinutes;
+
+  while (currentMinutes <= endTotalMinutes && times.length < MAX_TIMES) {
+    const hours = Math.floor(currentMinutes / 60);
+    const minutes = Math.round(currentMinutes % 60);
+
+    times.push(
+      `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
+    );
+
+    currentMinutes += intervalMinutes;
+  }
+
+  return times;
+}
