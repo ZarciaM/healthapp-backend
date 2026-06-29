@@ -677,12 +677,23 @@ export function generateIntervalTimes(
 
   const intervalMinutes = intervalHours * 60;
   const MAX_TIMES = 20;
+
+  const expectedCount =
+    Math.floor((endTotalMinutes - startTotalMinutes) / intervalMinutes) + 1;
+
+  if (expectedCount > MAX_TIMES) {
+    throw ApiError.badRequest(
+      `L'intervalle de ${intervalHours}h génère ${expectedCount} horaires, ce qui dépasse la limite de ${MAX_TIMES}. Augmentez l'intervalle.`,
+    );
+  }
+
   const times: string[] = [];
   let currentMinutes = startTotalMinutes;
 
-  while (currentMinutes <= endTotalMinutes && times.length < MAX_TIMES) {
-    const hours = Math.floor(currentMinutes / 60);
-    const minutes = Math.round(currentMinutes % 60);
+  while (times.length < expectedCount) {
+    const rounded = Math.round(currentMinutes);
+    const hours = Math.floor(rounded / 60);
+    const minutes = rounded % 60;
 
     times.push(
       `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
