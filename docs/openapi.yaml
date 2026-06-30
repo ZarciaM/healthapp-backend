@@ -647,6 +647,651 @@ paths:
                 success: false
                 message: "Utilisateur introuvable"
 
+  /bmi:
+    post:
+      tags: [BMI]
+      summary: "Créer une entrée IMC"
+      description: >
+        Calcule et enregistre une entrée IMC à partir du poids et de la
+        taille. Le `bmiValue` et la `category` sont calculés côté serveur
+        par la fonction `getBMICategory`. La réponse inclut également un
+        `message` associé à la catégorie (ex: conseil personnalisé).
+        Le champ `recordedAt` est optionnel ; s'il est omis, la date
+        courante est utilisée.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBmiEntryInput"
+            example:
+              weight: 75
+              height: 175
+              recordedAt: "2025-06-15T08:00:00.000Z"
+      responses:
+        "201":
+          description: "Entrée IMC créée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Entrée IMC créée"
+                data:
+                  entry:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    weight: 75
+                    height: 175
+                    bmiValue: 24.5
+                    category: "poids_normal"
+                    message: "Votre IMC est dans la norme. Continuez à maintenir de bonnes habitudes."
+                    recordedAt: "2025-06-15T08:00:00.000Z"
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Données invalides (validation Zod)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /bmi/history:
+    get:
+      tags: [BMI]
+      summary: "Historique des entrées IMC"
+      description: >
+        Retourne la liste des entrées IMC de l'utilisateur, triées par
+        `recordedAt` décroissant. Les paramètres `from` et `to` filtrent
+        par plage de dates. Le paramètre `limit` contrôle le nombre de
+        résultats (défaut 50, max 200).
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: "Nombre d'entrées (doit être un entier positif)"
+        - in: query
+          name: from
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Borne inférieure (incluse) sur recordedAt"
+        - in: query
+          name: to
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Borne supérieure (incluse) sur recordedAt"
+      responses:
+        "200":
+          description: "Historique récupéré"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Historique récupéré"
+                data:
+                  entries:
+                    - _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                      userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                      weight: 75
+                      height: 175
+                      bmiValue: 24.5
+                      category: "poids_normal"
+                      recordedAt: "2025-06-15T08:00:00.000Z"
+                      createdAt: "2025-06-15T08:00:00.000Z"
+                      updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Paramètre invalide (limit non entier, date from/to invalide)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /bmi/latest:
+    get:
+      tags: [BMI]
+      summary: "Dernière entrée IMC"
+      description: >
+        Retourne l'entrée IMC la plus récente (triée par `recordedAt`
+        décroissant). **La réponse peut être `{ data: { entry: null } }`
+        si aucune entrée n'existe — ce n'est PAS une erreur 404.** Le
+        client doit gérer le cas `entry === null`.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Dernière entrée IMC (peut être null)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                found:
+                  summary: "Entrée trouvée"
+                  value:
+                    success: true
+                    message: "Dernière entrée IMC"
+                    data:
+                      entry:
+                        _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        weight: 75
+                        height: 175
+                        bmiValue: 24.5
+                        category: "poids_normal"
+                        recordedAt: "2025-06-15T08:00:00.000Z"
+                        createdAt: "2025-06-15T08:00:00.000Z"
+                        updatedAt: "2025-06-15T08:00:00.000Z"
+                notFound:
+                  summary: "Aucune entrée (null)"
+                  value:
+                    success: true
+                    message: "Dernière entrée IMC"
+                    data:
+                      entry: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /bmi/{id}:
+    delete:
+      tags: [BMI]
+      summary: "Supprimer une entrée IMC"
+      description: >
+        Supprime une entrée IMC. Le middleware `validateObjectId` vérifie
+        que l'ID est un ObjectId MongoDB valide (sinon 400). La
+        suppression est protégée contre les attaques IDOR : le service
+        vérifie que l'entrée appartient bien à l'utilisateur connecté
+        (sinon 403). Si l'ObjectId est valide mais l'entrée introuvable,
+        une erreur 404 est retournée.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId MongoDB de l'entrée IMC"
+      responses:
+        "200":
+          description: "Entrée IMC supprimée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Entrée IMC supprimée"
+        "400":
+          description: "ID malformé (ObjectId invalide)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "ID invalide"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Tentative de suppression d'une entrée ne vous appartenant pas (IDOR)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Vous ne pouvez pas supprimer une entrée qui ne vous appartient pas"
+        "404":
+          description: "Entrée introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Entrée IMC introuvable"
+
+  /weight:
+    post:
+      tags: [Weight]
+      summary: "Enregistrer une pesée"
+      description: >
+        Enregistre une pesée et calcule l'IMC correspondant. Cette route
+        **délègue en interne au service BMI** (même collection MongoDB
+        `BmiEntry`). Les entrées créées ici apparaissent donc aussi dans
+        l'historique IMC. Le schéma de validation est identique à celui
+        de `POST /bmi` (réutilisé via `createWeightEntrySchema`).
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBmiEntryInput"
+            example:
+              weight: 75
+              height: 175
+              recordedAt: "2025-06-15T08:00:00.000Z"
+      responses:
+        "201":
+          description: "Pesée enregistrée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Pesée enregistrée"
+                data:
+                  entry:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    weight: 75
+                    height: 175
+                    bmiValue: 24.5
+                    category: "poids_normal"
+                    recordedAt: "2025-06-15T08:00:00.000Z"
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Données invalides (validation Zod)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /weight/history:
+    get:
+      tags: [Weight]
+      summary: "Historique des pesées"
+      description: >
+        Retourne l'historique des pesées (délègue au service BMI, même
+        collection). Les paramètres `from` et `to` filtrent par plage de
+        dates. Le paramètre `limit` contrôle le nombre de résultats
+        (défaut 50, max 200). Une validation supplémentaire vérifie que
+        `from` précède `to` si les deux sont fournis.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: "Nombre d'entrées (doit être un entier positif)"
+        - in: query
+          name: from
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Borne inférieure (incluse) sur recordedAt"
+        - in: query
+          name: to
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Borne supérieure (incluse) sur recordedAt"
+      responses:
+        "200":
+          description: "Historique des pesées"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Historique des pesées"
+                data:
+                  entries:
+                    - _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                      userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                      weight: 75
+                      height: 175
+                      bmiValue: 24.5
+                      category: "poids_normal"
+                      recordedAt: "2025-06-15T08:00:00.000Z"
+                      createdAt: "2025-06-15T08:00:00.000Z"
+                      updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Paramètre invalide (limit non entier, from > to, dates invalides)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /weight/current:
+    get:
+      tags: [Weight]
+      summary: "Dernière pesée"
+      description: >
+        Retourne la pesée la plus récente (délègue au service BMI).
+        **La réponse peut être `{ data: { entry: null } }` si aucune
+        pesée n'existe — ce n'est PAS une erreur 404.**
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Dernière pesée (peut être null)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                found:
+                  summary: "Pesée trouvée"
+                  value:
+                    success: true
+                    message: "Dernière pesée"
+                    data:
+                      entry:
+                        _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        weight: 75
+                        height: 175
+                        bmiValue: 24.5
+                        category: "poids_normal"
+                        recordedAt: "2025-06-15T08:00:00.000Z"
+                        createdAt: "2025-06-15T08:00:00.000Z"
+                        updatedAt: "2025-06-15T08:00:00.000Z"
+                notFound:
+                  summary: "Aucune pesée (null)"
+                  value:
+                    success: true
+                    message: "Dernière pesée"
+                    data:
+                      entry: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /weight/goal:
+    post:
+      tags: [Weight]
+      summary: "Définir ou mettre à jour un objectif de poids"
+      description: >
+        Crée ou met à jour (upsert) un objectif de poids pour
+        l'utilisateur connecté. Le `startingWeight` est automatiquement
+        initialisé à la valeur de la dernière pesée. Une erreur 400 est
+        retournée si l'utilisateur n'a encore enregistré aucune pesée.
+        Le champ `targetDate` est optionnel mais, s'il est fourni, doit
+        être une date future.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetWeightGoalInput"
+            example:
+              targetWeight: 70
+              targetDate: "2025-12-31T00:00:00.000Z"
+      responses:
+        "200":
+          description: "Objectif de poids enregistré"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Objectif de poids enregistré"
+                data:
+                  goal:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    targetWeight: 70
+                    targetDate: "2025-12-31T00:00:00.000Z"
+                    startingWeight: 75
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Données invalides ou aucune pesée existante"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation:
+                  summary: "Validation échouée"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                noEntry:
+                  summary: "Aucune pesée au préalable"
+                  value:
+                    success: false
+                    message: "Enregistrez au moins une pesée avant de définir un objectif"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /weight/progress:
+    get:
+      tags: [Weight]
+      summary: "Progression vers l'objectif de poids"
+      description: >
+        Retourne la progression de l'utilisateur vers son objectif de
+        poids. Si aucun objectif n'est défini, `goal` est null et un
+        message neutre l'indique ("Aucun objectif défini pour le
+        moment"). Si l'objectif existe mais aucune pesée n'a été
+        enregistrée depuis, `currentWeight` et les champs dérivés
+        sont null. **Les messages restent factuels et neutres même
+        si le poids évolue dans le sens inverse de l'objectif**
+        (ex: "Votre poids a augmenté de X kg" alors que l'objectif
+        est de perdre du poids).
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Progression récupérée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                inProgress:
+                  summary: "Objectif en cours"
+                  value:
+                    success: true
+                    message: "Progression récupérée"
+                    data:
+                      progress:
+                        goal:
+                          _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                          userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                          targetWeight: 70
+                          targetDate: "2025-12-31T00:00:00.000Z"
+                          startingWeight: 75
+                          createdAt: "2025-06-10T08:00:00.000Z"
+                          updatedAt: "2025-06-10T08:00:00.000Z"
+                        currentWeight: 73
+                        startingWeight: 75
+                        weightChange: -2
+                        percentToGoal: 40
+                        message: "Vous avez perdu 2.0 kg sur les 5.0 kg visés (40% de votre objectif)."
+                noGoal:
+                  summary: "Aucun objectif défini"
+                  value:
+                    success: true
+                    message: "Progression récupérée"
+                    data:
+                      progress:
+                        goal: null
+                        currentWeight: 75
+                        startingWeight: null
+                        weightChange: null
+                        percentToGoal: null
+                        message: "Aucun objectif défini pour le moment"
+                noWeightYet:
+                  summary: "Objectif défini mais aucune pesée"
+                  value:
+                    success: true
+                    message: "Progression récupérée"
+                    data:
+                      progress:
+                        goal:
+                          _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                          userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                          targetWeight: 70
+                          targetDate: "2025-12-31T00:00:00.000Z"
+                          startingWeight: 75
+                          createdAt: "2025-06-10T08:00:00.000Z"
+                          updatedAt: "2025-06-10T08:00:00.000Z"
+                        currentWeight: null
+                        startingWeight: 75
+                        weightChange: null
+                        percentToGoal: null
+                        message: "Enregistrez une pesée pour voir votre progression"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /calories:
+    get:
+      tags: [Calories]
+      summary: "Calculer les besoins caloriques quotidiens"
+      description: >
+        Calcule le métabolisme de base (BMR), la dépense énergétique
+        totale (TDEE) et les calories recommandées selon l'objectif de
+        l'utilisateur.
+
+        **Query params — Règle du "tout ou rien" :**
+        Les paramètres `weight` et `height` sont optionnels mais
+        doivent être fournis **ensemble**. Si l'un est fourni sans
+        l'autre, la requête est rejetée en 400. Aucun fallback
+        silencieux n'est appliqué sur un override partiel.
+
+        **Cascade de fallback pour weight / height :**
+        1. **Override** — si `weight` et `height` sont fournis en query,
+           ils sont utilisés (weightSource: `"override"`)
+        2. **Dernière pesée (BmiEntry)** — sinon, le poids et la taille
+           de la dernière entrée BmiEntry sont utilisés (weightSource:
+           `"latest_entry"`)
+        3. **Profil santé (HealthProfile)** — en dernier recours, les
+           valeurs du profil santé sont utilisées (weightSource:
+           `"health_profile"`)
+
+        Si aucune de ces sources ne fournit les données nécessaires, la
+        requête échoue en 400.
+
+        **Conditions préalables :**
+        - L'utilisateur doit avoir un `gender` et un `dateOfBirth`
+          définis (sinon 400)
+        - Le profil santé doit avoir `activityLevel` et `goal`
+          renseignés (sinon 400 — onboarding incomplet)
+
+        **Plancher de sécurité calorique :**
+        Les calories recommandées ne descendent jamais sous un minimum
+        vital : 1 200 kcal/j pour les femmes, 1 500 kcal/j pour les
+        hommes. Le message de réponse l'indique explicitement si ce
+        plancher a été appliqué.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: weight
+          required: false
+          schema:
+            type: number
+            minimum: 20
+            maximum: 300
+          description: "Poids en kg (doit être accompagné de height)"
+        - in: query
+          name: height
+          required: false
+          schema:
+            type: number
+            minimum: 50
+            maximum: 250
+          description: "Taille en cm (doit être accompagnée de weight)"
+      responses:
+        "200":
+          description: "Besoins caloriques calculés"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Besoins caloriques calculés"
+                data:
+                  result:
+                    bmr: 1696
+                    tdee: 2629
+                    recommendedCalories: 1500
+                    message: "Un déficit modéré de 500 kcal par jour est recommandé pour une perte de poids progressive et durable. Nous avons ajusté cette recommandation à un minimum sain. Consultez un professionnel de santé pour un suivi personnalisé."
+                    sourceData:
+                      weight: 75
+                      height: 175
+                      age: 35
+                      gender: "male"
+                      activityLevel: "moderate"
+                      goal: "lose_weight"
+                      weightSource: "latest_entry"
+        "400":
+          description: "Données manquantes ou onboarding incomplet"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                partialOverride:
+                  summary: "Un seul des deux params override fourni"
+                  value:
+                    success: false
+                    message: "Les paramètres weight et height doivent être fournis ensemble pour surcharger les valeurs du profil"
+                incompleteProfile:
+                  summary: "Genre ou date de naissance manquants"
+                  value:
+                    success: false
+                    message: "Veuillez compléter votre profil (genre et date de naissance) avant de calculer vos besoins caloriques"
+                incompleteOnboarding:
+                  summary: "ActivityLevel ou goal manquants dans le profil santé"
+                  value:
+                    success: false
+                    message: "Veuillez compléter le questionnaire santé (niveau d'activité et objectif) avant de calculer vos besoins caloriques"
+                noHealthProfile:
+                  summary: "Aucun profil santé trouvé"
+                  value:
+                    success: false
+                    message: "Veuillez compléter votre profil de santé avant de calculer vos besoins"
+                noWeightSource:
+                  summary: "Aucune source de poids disponible"
+                  value:
+                    success: false
+                    message: "Veuillez compléter votre profil de santé ou enregistrer une pesée avant de calculer vos besoins"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -975,6 +1620,206 @@ components:
               maximum: 45
               description: "Durée moyenne du cycle en jours"
               example: 28
+
+    BmiEntry:
+      type: object
+      description: "Entrée IMC (stockée dans la collection BmiEntry, partagée entre les modules BMI et Weight)"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        userId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0f"
+        weight:
+          type: number
+          description: "Poids en kg"
+          example: 75
+        height:
+          type: number
+          description: "Taille en cm"
+          example: 175
+        bmiValue:
+          type: number
+          description: "Valeur IMC calculée (arrondie à 1 décimale)"
+          example: 24.5
+        category:
+          type: string
+          enum: [insuffisance_ponderale, poids_normal, surpoids, obesite]
+          description: "Catégorie IMC déterminée par getBMICategory"
+          example: "poids_normal"
+        recordedAt:
+          type: string
+          format: date-time
+          description: "Date de la mesure (peut différer de createdAt si fournie par le client)"
+          example: "2025-06-15T08:00:00.000Z"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateBmiEntryInput:
+      type: object
+      description: "Payload pour la création d'une entrée IMC (réutilisé par Weight)"
+      required: [weight, height]
+      properties:
+        weight:
+          type: number
+          minimum: 20
+          maximum: 300
+          description: "Poids en kg"
+          example: 75
+        height:
+          type: number
+          minimum: 50
+          maximum: 250
+          description: "Taille en cm"
+          example: 175
+        recordedAt:
+          type: string
+          format: date-time
+          description: "Date de la mesure (optionnelle, défaut: Date.now). Ne peut pas être dans le futur."
+          example: "2025-06-15T08:00:00.000Z"
+
+    WeightGoal:
+      type: object
+      description: "Objectif de poids (collection WeightGoal, un document unique par utilisateur via upsert)"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        userId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0f"
+        targetWeight:
+          type: number
+          description: "Poids cible en kg"
+          example: 70
+        targetDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Date cible optionnelle (doit être dans le futur si fournie)"
+          example: "2025-12-31T00:00:00.000Z"
+        startingWeight:
+          type: number
+          description: "Poids de départ (initialisé à la dernière pesée lors de la création)"
+          example: 75
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SetWeightGoalInput:
+      type: object
+      description: "Payload pour créer/mettre à jour un objectif de poids"
+      required: [targetWeight]
+      properties:
+        targetWeight:
+          type: number
+          minimum: 20
+          maximum: 300
+          description: "Poids cible en kg"
+          example: 70
+        targetDate:
+          type: string
+          format: date-time
+          description: "Date cible optionnelle (doit être dans le futur si fournie)"
+          example: "2025-12-31T00:00:00.000Z"
+
+    WeightProgress:
+      type: object
+      description: "Progression vers l'objectif de poids (contenu dans data.progress)"
+      properties:
+        goal:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/WeightGoal"
+          description: "Objectif de poids ou null si aucun n'est défini"
+        currentWeight:
+          type: number
+          nullable: true
+          description: "Dernier poids enregistré ou null si aucune pesée"
+          example: 73
+        startingWeight:
+          type: number
+          nullable: true
+          description: "Poids de départ au moment de la définition de l'objectif"
+          example: 75
+        weightChange:
+          type: number
+          nullable: true
+          description: "Différence currentWeight - startingWeight (négatif = perte, positif = gain)"
+          example: -2
+        percentToGoal:
+          type: number
+          nullable: true
+          description: "Pourcentage de progression vers l'objectif (0-100, null si non calculable)"
+          example: 40
+        message:
+          type: string
+          description: "Message factuel sur la progression (neutre même si l'évolution va dans le sens inverse de l'objectif)"
+          example: "Vous avez perdu 2.0 kg sur les 5.0 kg visés (40% de votre objectif)."
+
+    CaloriesCalculation:
+      type: object
+      description: "Résultat du calcul des besoins caloriques (contenu dans data.result)"
+      properties:
+        bmr:
+          type: number
+          description: "Métabolisme de base (Mifflin-St Jeor)"
+          example: 1696
+        tdee:
+          type: number
+          description: "Dépense énergétique totale (BMR × multiplicateur d'activité)"
+          example: 2629
+        recommendedCalories:
+          type: number
+          description: "Calories recommandées ajustées selon l'objectif (avec plancher de sécurité 1200/1500 kcal)"
+          example: 1500
+        message:
+          type: string
+          description: "Message explicatif sur les recommandations (contient la mention du plancher si appliqué)"
+          example: "Un déficit modéré de 500 kcal par jour est recommandé pour une perte de poids progressive et durable."
+        sourceData:
+          type: object
+          description: "Données sources utilisées pour le calcul"
+          required: [weight, height, age, gender, activityLevel, goal, weightSource]
+          properties:
+            weight:
+              type: number
+              example: 75
+            height:
+              type: number
+              example: 175
+            age:
+              type: integer
+              example: 35
+            gender:
+              type: string
+              enum: [male, female]
+              example: "male"
+            activityLevel:
+              type: string
+              enum: [sedentary, light, moderate, active, very_active]
+              example: "moderate"
+            goal:
+              type: string
+              enum: [lose_weight, gain_weight, maintain, general_health]
+              example: "lose_weight"
+            weightSource:
+              type: string
+              enum: [override, latest_entry, health_profile]
+              description: "Source ayant fourni le poids utilisé par le calcul"
+              example: "latest_entry"
 
   responses:
     Unauthorized:
