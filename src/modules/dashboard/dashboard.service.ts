@@ -48,8 +48,9 @@ function unwrapSettled<T>(
 }
 
 function isError<T>(
-  result: T | { error: string },
+  result: T | { error: string } | null | undefined,
 ): result is { error: string } {
+  if (result === null || result === undefined) return false;
   return typeof (result as { error: string }).error === "string";
 }
 
