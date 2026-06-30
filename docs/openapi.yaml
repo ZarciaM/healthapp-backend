@@ -4010,13 +4010,711 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  ############################################################################
+  # MEDICATION
+  ############################################################################
+
+  /medication:
+    post:
+      tags: [Medication]
+      summary: "Créer un rappel de médicament"
+      description: >
+        Crée un rappel de prise de médicament.
+
+        **Déclenchement interne (hors API) :**
+        La fonction `findDueReminders` dans le service n'est PAS une
+        route API exposée. Elle est invoquée exclusivement par le
+        scheduler `node-cron` (tâche planifiée toutes les minutes).
+        Le déclenchement réel des notifications dépend du **fuseau
+        horaire** de l'utilisateur (champ `timezone` stocké sur le
+        profil User), pas de l'heure du serveur. Le scheduler convertit
+        l'heure UTC courante vers chaque fuseau utilisateur distinct et
+        ne déclenche le rappel que si l'heure locale correspond à un
+        des `times` programmés.
+
+        **Limitations :** Voir la route GET /push-subscriptions/vapid-public-key pour
+        l'état du système de notifications push.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMedicationReminderInput"
+            example:
+              medicationName: "Doliprane"
+              dosage: "1000mg"
+              times: ["08:00", "20:00"]
+              startDate: "2025-06-15"
+              endDate: "2025-07-15"
+              notifyByEmail: true
+              notifyByPush: true
+      responses:
+        "201":
+          description: "Rappel créé"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Medication reminder created"
+                data:
+                  reminder:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    medicationName: "Doliprane"
+                    dosage: "1000mg"
+                    times: ["08:00", "20:00"]
+                    startDate: "2025-06-15T00:00:00.000Z"
+                    endDate: "2025-07-15T00:00:00.000Z"
+                    isActive: true
+                    notifyByEmail: true
+                    notifyByPush: true
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Données invalides"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Validation échouée"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    get:
+      tags: [Medication]
+      summary: "Lister les rappels de médicaments"
+      description: >
+        Retourne la liste des rappels de médicaments de l'utilisateur
+        connecté, triée par date de création décroissante.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: activeOnly
+          required: false
+          schema:
+            type: string
+            enum: ["true"]
+          description: "Si présent et égal à 'true', ne retourne que les rappels actifs (isActive: true)"
+      responses:
+        "200":
+          description: "Liste des rappels"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Medication reminders retrieved"
+                data:
+                  reminders:
+                    - _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                      userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                      medicationName: "Doliprane"
+                      dosage: "1000mg"
+                      times: ["08:00", "20:00"]
+                      startDate: "2025-06-15T00:00:00.000Z"
+                      endDate: "2025-07-15T00:00:00.000Z"
+                      isActive: true
+                      notifyByEmail: true
+                      notifyByPush: true
+                      createdAt: "2025-06-15T08:00:00.000Z"
+                      updatedAt: "2025-06-15T08:00:00.000Z"
+                    - _id: "664a1b2c3d4e5f6a7b8c9d10"
+                      userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                      medicationName: "Vitamine D"
+                      dosage: null
+                      times: ["09:00"]
+                      startDate: "2025-05-01T00:00:00.000Z"
+                      endDate: null
+                      isActive: false
+                      notifyByEmail: true
+                      notifyByPush: false
+                      createdAt: "2025-05-01T08:00:00.000Z"
+                      updatedAt: "2025-06-10T08:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /medication/{id}:
+    patch:
+      tags: [Medication]
+      summary: "Modifier un rappel de médicament"
+      description: >
+        Met à jour un rappel existant. Tous les champs sont optionnels
+        (remplacement partiel). **Protection IDOR** : seuls le
+        propriétaire du rappel peut le modifier.
+
+        **Gestion de endDate :**
+        - Si `endDate` est omis, la valeur existante est conservée.
+        - Si `endDate` est explicitement `null`, le champ est supprimé
+          ($unset) — le rappel n'a alors plus de date de fin.
+        - Si `endDate` est une date, elle doit être postérieure à
+          `startDate` (valeur fournie ou existante).
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId du rappel à modifier"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMedicationReminderInput"
+            example:
+              dosage: "500mg"
+              notifyByEmail: false
+      responses:
+        "200":
+          description: "Rappel modifié"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Medication reminder updated"
+                data:
+                  reminder:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    medicationName: "Doliprane"
+                    dosage: "500mg"
+                    times: ["08:00", "20:00"]
+                    startDate: "2025-06-15T00:00:00.000Z"
+                    endDate: "2025-07-15T00:00:00.000Z"
+                    isActive: true
+                    notifyByEmail: false
+                    notifyByPush: true
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-16T08:00:00.000Z"
+        "400":
+          description: "Données invalides"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "endDate must be after startDate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Tentative de modification d'un rappel ne vous appartenant pas (IDOR)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "You cannot update a reminder that does not belong to you"
+        "404":
+          description: "Rappel introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Reminder not found"
+
+  /medication/{id}/deactivate:
+    patch:
+      tags: [Medication]
+      summary: "Désactiver un rappel"
+      description: >
+        Passe `isActive` à `false` sans supprimer le document.
+        L'historique du traitement est conservé. **Protection IDOR**
+        : seuls le propriétaire du rappel peut le désactiver.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId du rappel à désactiver"
+      responses:
+        "200":
+          description: "Rappel désactivé"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Medication reminder deactivated"
+                data: {}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Tentative de désactivation d'un rappel ne vous appartenant pas (IDOR)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "You cannot deactivate a reminder that does not belong to you"
+        "404":
+          description: "Rappel introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Reminder not found"
+
+    delete:
+      tags: [Medication]
+      summary: "Supprimer un rappel"
+      description: >
+        Supprime définitivement le rappel de la base de données.
+        **Protection IDOR** : seuls le propriétaire du rappel peut le
+        supprimer.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId du rappel à supprimer"
+      responses:
+        "200":
+          description: "Rappel supprimé"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Medication reminder deleted"
+                data: {}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Tentative de suppression d'un rappel ne vous appartenant pas (IDOR)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "You cannot delete a reminder that does not belong to you"
+        "404":
+          description: "Rappel introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Reminder not found"
+
+  ############################################################################
+  # PUSH SUBSCRIPTIONS
+  ############################################################################
+
+  /push-subscriptions/vapid-public-key:
+    get:
+      tags: [PushSubscriptions]
+      summary: "Obtenir la clé publique VAPID"
+      description: >
+        Route **publique** (sans authentification) qui retourne la
+        clé publique VAPID nécessaire à l'abonnement push côté
+        navigateur. Le frontend doit appeler cette route avant
+        d'initialiser `registration.pushManager.subscribe()`.
+
+        **État actuel :** Ce système de notifications push n'a pas
+        encore été testé en conditions réelles avec un vrai navigateur
+        abonné — le frontend n'existe pas encore. Seule la logique
+        serveur a été validée unitairement.
+      responses:
+        "200":
+          description: "Clé publique VAPID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "VAPID public key"
+                data:
+                  publicKey: "BEl62iUYgUivxIkv69yVEl62iUYgUivxIkv69yVEl62iUYgUivxIkv69yVEl62iUYgUivxIkv69yVEl62iUYgUivxIkv69yV"
+
+  /push-subscriptions:
+    post:
+      tags: [PushSubscriptions]
+      summary: "S'abonner aux notifications push"
+      description: >
+        Enregistre ou met à jour (upsert basé sur `endpoint`) un
+        abonnement push pour l'utilisateur connecté. Les champs
+        `endpoint`, `keys.p256dh` et `keys.auth` sont requis (ils
+        sont fournis par l'API Push du navigateur).
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePushSubscriptionInput"
+            example:
+              endpoint: "https://fcm.googleapis.com/fcm/send/..."
+              keys:
+                p256dh: "BCi1l6pY..."
+                auth: "aGVsbG8..."
+      responses:
+        "201":
+          description: "Abonnement enregistré"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Push subscription registered"
+                data:
+                  subscription:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    endpoint: "https://fcm.googleapis.com/fcm/send/..."
+                    keys:
+                      p256dh: "BCi1l6pY..."
+                      auth: "aGVsbG8..."
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Données manquantes"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "endpoint, keys.p256dh and keys.auth are required"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    delete:
+      tags: [PushSubscriptions]
+      summary: "Se désabonner des notifications push"
+      description: >
+        Supprime l'abonnement push de l'utilisateur connecté.
+        Le champ `endpoint` dans le body est optionnel — s'il est
+        fourni, seul cet abonnement est supprimé ; sinon, **tous**
+        les abonnements de l'utilisateur sont supprimés.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                endpoint:
+                  type: string
+                  description: "Endpoint à supprimer (optionnel — supprime tous les abonnements si omis)"
+                  example: "https://fcm.googleapis.com/fcm/send/..."
+      responses:
+        "200":
+          description: "Désabonnement effectué"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Push subscription removed"
+                data: {}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  ############################################################################
+  # HYDRATION
+  ############################################################################
+
+  /hydration:
+    post:
+      tags: [Hydration]
+      summary: "Créer ou mettre à jour la configuration d'hydratation"
+      description: >
+        Crée ou met à jour (upsert) la configuration de rappels
+        d'hydratation de l'utilisateur connecté. Il n'existe qu'**UNE
+        SEULE** configuration active par utilisateur (pas d'historique
+        de plusieurs configs, contrairement au module Medication qui
+        peut avoir plusieurs traitements en parallèle).
+
+        **Modes :**
+        - `"fixed_times"` : l'utilisateur fournit un tableau `times`
+          (`["08:00", "12:00", "18:00"]`). `intervalConfig` ne doit
+          **pas** être fourni.
+        - `"interval"` : l'utilisateur fournit `intervalConfig`
+          (`{ startTime, endTime, intervalHours }`). Le tableau
+          `times` final est **généré automatiquement** par le serveur
+          via `generateIntervalTimes()` et stocké en base. Le frontend
+          n'a jamais besoin de le calculer lui-même. Le champ `times`
+          ne doit **pas** être fourni directement dans ce mode.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHydrationReminderInput"
+            examples:
+              fixed_times:
+                summary: "Mode heures fixes"
+                value:
+                  mode: "fixed_times"
+                  times: ["08:00", "12:00", "18:00"]
+                  notifyByEmail: true
+                  notifyByPush: true
+              interval:
+                summary: "Mode intervalle"
+                value:
+                  mode: "interval"
+                  intervalConfig:
+                    startTime: "08:00"
+                    endTime: "20:00"
+                    intervalHours: 2
+                  notifyByEmail: true
+                  notifyByPush: false
+      responses:
+        "200":
+          description: "Configuration enregistrée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Hydration reminder saved"
+                data:
+                  reminder:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    mode: "fixed_times"
+                    times: ["08:00", "12:00", "18:00"]
+                    isActive: true
+                    notifyByEmail: true
+                    notifyByPush: true
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Données invalides"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingTimes:
+                  summary: "times manquant en mode fixed_times"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "custom"
+                        path: ["times"]
+                        message: "times is required when mode is 'fixed_times' and must contain at least one time"
+                intervalConfigProvidedWithFixed:
+                  summary: "intervalConfig fourni en mode fixed_times"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "custom"
+                        path: ["intervalConfig"]
+                        message: "intervalConfig must not be provided when mode is 'fixed_times'"
+                missingIntervalConfig:
+                  summary: "intervalConfig manquant en mode interval"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "custom"
+                        path: ["intervalConfig"]
+                        message: "intervalConfig is required when mode is 'interval'"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    get:
+      tags: [Hydration]
+      summary: "Récupérer la configuration d'hydratation"
+      description: >
+        Retourne la configuration de rappels d'hydratation de
+        l'utilisateur connecté. **La réponse peut être
+        `{ data: { reminder: null } }` si l'utilisateur n'a jamais
+        configuré de rappel d'hydratation** — ce n'est PAS une
+        erreur 404.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Configuration d'hydratation (peut être null)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                found:
+                  summary: "Configuration existante"
+                  value:
+                    success: true
+                    message: "Hydration reminder retrieved"
+                    data:
+                      reminder:
+                        _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        mode: "interval"
+                        times: ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00"]
+                        intervalConfig:
+                          startTime: "08:00"
+                          endTime: "20:00"
+                          intervalHours: 2
+                        isActive: true
+                        notifyByEmail: true
+                        notifyByPush: false
+                        createdAt: "2025-06-15T08:00:00.000Z"
+                        updatedAt: "2025-06-15T08:00:00.000Z"
+                notFound:
+                  summary: "Jamais configuré"
+                  value:
+                    success: true
+                    message: "Hydration reminder retrieved"
+                    data:
+                      reminder: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    delete:
+      tags: [Hydration]
+      summary: "Supprimer la configuration d'hydratation"
+      description: >
+        Supprime définitivement la configuration de rappels
+        d'hydratation. Retourne 404 si l'utilisateur n'a pas encore
+        de configuration.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Configuration supprimée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Hydration reminder deleted"
+                data: {}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: "Aucune configuration trouvée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "No hydration reminder found for this user"
+
+  /hydration/deactivate:
+    patch:
+      tags: [Hydration]
+      summary: "Désactiver les rappels d'hydratation"
+      description: >
+        Passe `isActive` à `false` sans supprimer la configuration.
+        La configuration peut être réactivée ultérieurement
+        (PATCH /hydration/reactivate). Retourne 404 si l'utilisateur
+        n'a pas encore de configuration.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Rappels désactivés"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Hydration reminder deactivated"
+                data: {}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: "Aucune configuration trouvée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "No hydration reminder found for this user"
+
+  /hydration/reactivate:
+    patch:
+      tags: [Hydration]
+      summary: "Réactiver les rappels d'hydratation"
+      description: >
+        Passe `isActive` à `true`. Retourne la configuration réactivée.
+        Retourne 404 si l'utilisateur n'a pas encore de configuration.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Rappels réactivés"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Hydration reminder reactivated"
+                data:
+                  reminder:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    mode: "fixed_times"
+                    times: ["08:00", "12:00", "18:00"]
+                    isActive: true
+                    notifyByEmail: true
+                    notifyByPush: true
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-16T08:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: "Aucune configuration trouvée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "No hydration reminder found for this user"
+
 components:
-  securitySchemes:
-    cookieAuth:
-      type: apiKey
-      in: cookie
-      name: accessToken
-      description: "Cookie httpOnly `accessToken` émis lors de la connexion (POST /api/auth/login)"
 
   schemas:
     User:
@@ -5414,6 +6112,309 @@ components:
           allOf:
             - $ref: "#/components/schemas/PregnancyMilestone"
           description: "Jalon de la semaine en cours (null si période pré-conception)"
+
+    MedicationReminder:
+      type: object
+      description: "Rappel de prise de médicament"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        userId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0f"
+        medicationName:
+          type: string
+          example: "Doliprane"
+        dosage:
+          type: string
+          nullable: true
+          example: "1000mg"
+        times:
+          type: array
+          items:
+            type: string
+            example: "08:00"
+          minItems: 1
+          description: "Heures de prise au format HH:mm"
+          example: ["08:00", "20:00"]
+        startDate:
+          type: string
+          format: date-time
+          example: "2025-06-15T00:00:00.000Z"
+        endDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-07-15T00:00:00.000Z"
+        isActive:
+          type: boolean
+          example: true
+        notifyByEmail:
+          type: boolean
+          default: true
+          example: true
+        notifyByPush:
+          type: boolean
+          default: true
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateMedicationReminderInput:
+      type: object
+      description: "Payload pour créer un rappel de médicament"
+      required: [medicationName, times, startDate]
+      properties:
+        medicationName:
+          type: string
+          minLength: 1
+          description: "Nom du médicament"
+          example: "Doliprane"
+        dosage:
+          type: string
+          description: "Dosage (optionnel, ex: 1000mg, 1 comprimé)"
+          example: "1000mg"
+        times:
+          type: array
+          items:
+            type: string
+            pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          minItems: 1
+          description: "Heures de prise au format HH:mm"
+          example: ["08:00", "20:00"]
+        startDate:
+          type: string
+          format: date
+          description: "Date de début du traitement"
+          example: "2025-06-15"
+        endDate:
+          type: string
+          format: date
+          nullable: true
+          description: "Date de fin du traitement (optionnelle, doit être > startDate)"
+          example: "2025-07-15"
+        notifyByEmail:
+          type: boolean
+          default: true
+          description: "Notification par email ?"
+          example: true
+        notifyByPush:
+          type: boolean
+          default: true
+          description: "Notification push ?"
+          example: true
+
+    UpdateMedicationReminderInput:
+      type: object
+      description: "Payload pour modifier un rappel de médicament (tous les champs sont optionnels)"
+      properties:
+        medicationName:
+          type: string
+          minLength: 1
+          description: "Nom du médicament"
+          example: "Doliprane"
+        dosage:
+          type: string
+          nullable: true
+          description: "Dosage (passer null pour effacer)"
+          example: "500mg"
+        times:
+          type: array
+          items:
+            type: string
+            pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          minItems: 1
+          description: "Heures de prise au format HH:mm"
+          example: ["08:00", "20:00"]
+        startDate:
+          type: string
+          format: date
+          description: "Date de début du traitement"
+          example: "2025-06-15"
+        endDate:
+          type: string
+          format: date
+          nullable: true
+          description: "Date de fin (null → $unset, valeur omise → inchangée, doit être > startDate)"
+          example: null
+        notifyByEmail:
+          type: boolean
+          description: "Notification par email ?"
+          example: false
+        notifyByPush:
+          type: boolean
+          description: "Notification push ?"
+          example: true
+
+    PushSubscription:
+      type: object
+      description: "Abonnement push Web"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        userId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0f"
+        endpoint:
+          type: string
+          description: "Endpoint fourni par le push service du navigateur"
+          example: "https://fcm.googleapis.com/fcm/send/..."
+        keys:
+          type: object
+          description: "Clés de chiffrement"
+          properties:
+            p256dh:
+              type: string
+              example: "BCi1l6pY..."
+            auth:
+              type: string
+              example: "aGVsbG8..."
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreatePushSubscriptionInput:
+      type: object
+      description: "Payload pour s'abonner aux notifications push"
+      required: [endpoint, keys]
+      properties:
+        endpoint:
+          type: string
+          description: "Endpoint fourni par PushSubscription du navigateur"
+          example: "https://fcm.googleapis.com/fcm/send/..."
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh:
+              type: string
+              description: "Clé publique P-256 (Base64 URL-safe)"
+              example: "BCi1l6pY..."
+            auth:
+              type: string
+              description: "Secret d'authentification (Base64 URL-safe)"
+              example: "aGVsbG8..."
+
+    HydrationReminder:
+      type: object
+      description: "Configuration de rappels d'hydratation"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        userId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0f"
+        mode:
+          type: string
+          enum: [fixed_times, interval]
+          description: "Mode de configuration"
+          example: "fixed_times"
+        times:
+          type: array
+          items:
+            type: string
+            example: "08:00"
+          description: "Heures de rappel générées (fournies en mode fixed_times, auto-générées en mode interval)"
+          example: ["08:00", "12:00", "18:00"]
+        intervalConfig:
+          type: object
+          nullable: true
+          description: "Configuration d'intervalle (présent uniquement en mode interval)"
+          properties:
+            startTime:
+              type: string
+              example: "08:00"
+            endTime:
+              type: string
+              example: "20:00"
+            intervalHours:
+              type: number
+              minimum: 0.5
+              maximum: 6
+              example: 2
+        isActive:
+          type: boolean
+          example: true
+        notifyByEmail:
+          type: boolean
+          default: true
+          example: true
+        notifyByPush:
+          type: boolean
+          default: true
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateHydrationReminderInput:
+      type: object
+      description: >
+        Payload pour créer/mettre à jour la configuration d'hydratation.
+        **Contraintes (superRefine) :**
+        - `mode === "fixed_times"` → `times` requis (≥ 1 heure),
+          `intervalConfig` interdit
+        - `mode === "interval"` → `intervalConfig` requis,
+          `times` interdit (il sera généré automatiquement)
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [fixed_times, interval]
+          example: "fixed_times"
+        times:
+          type: array
+          items:
+            type: string
+            pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          minItems: 1
+          description: "Heures de rappel (requis si mode=fixed_times, interdit si mode=interval)"
+          example: ["08:00", "12:00", "18:00"]
+        intervalConfig:
+          type: object
+          description: "Configuration d'intervalle (requis si mode=interval, interdit si mode=fixed_times)"
+          properties:
+            startTime:
+              type: string
+              pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+              example: "08:00"
+            endTime:
+              type: string
+              pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+              example: "20:00"
+            intervalHours:
+              type: number
+              minimum: 0.5
+              maximum: 6
+              description: "Espacement entre rappels (en heures, min 0.5, max 6)"
+              example: 2
+        notifyByEmail:
+          type: boolean
+          default: true
+          example: true
+        notifyByPush:
+          type: boolean
+          default: true
+          example: true
 
   responses:
     Unauthorized:
