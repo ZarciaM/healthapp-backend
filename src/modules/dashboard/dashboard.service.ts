@@ -70,11 +70,16 @@ function getUpcomingToday(
 ): IMedicationReminder[] {
   const now = new Date();
 
+  let currentLocalTime: string;
+  try {
+    currentLocalTime = formatInTimeZone(now, timezone, "HH:mm");
+  } catch {
+    currentLocalTime = formatInTimeZone(now, "UTC", "HH:mm");
+  }
+
   return reminders.filter((reminder) => {
     if (reminder.startDate > now) return false;
     if (reminder.endDate && reminder.endDate <= now) return false;
-
-    const currentLocalTime = formatInTimeZone(now, timezone, "HH:mm");
 
     return reminder.times.some((time) => time > currentLocalTime);
   });
