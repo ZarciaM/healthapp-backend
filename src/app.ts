@@ -6,6 +6,7 @@ import passport from "passport";
 import rateLimit from "express-rate-limit";
 import { env } from "./config/env.js";
 import { initializePassport } from "./config/passport.js";
+import { setupSwagger } from "./config/swagger.js";
 import { notFoundHandler } from "./middlewares/notFound.middleware.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
 import authRoutes from "./modules/auth/auth.routes.js";
@@ -37,6 +38,8 @@ app.use(cookieParser());
 
 initializePassport();
 app.use(passport.initialize());
+
+setupSwagger(app);
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
