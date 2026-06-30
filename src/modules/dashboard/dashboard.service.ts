@@ -33,6 +33,20 @@ async function safeCall<T>(
   }
 }
 
+function unwrapSettled<T>(
+  result: PromiseSettledResult<T>,
+  fallbackKey: string,
+): T | { error: string } {
+  if (result.status === "fulfilled") {
+    return result.value;
+  }
+  const err = result.reason;
+  if (err instanceof Error) {
+    return { error: err.message };
+  }
+  return { error: `Erreur dans ${fallbackKey}` };
+}
+
 function isError<T>(
   result: T | { error: string },
 ): result is { error: string } {
@@ -78,22 +92,7 @@ export async function getDashboard(userId: string): Promise<DashboardResponse> {
   const gender = user.gender ?? "";
   const timezone = user.timezone ?? "UTC";
 
-  const [
-    profile,
-    bmiLatest,
-    weightCurrent,
-    weightProgress,
-    calories,
-    water,
-    sleepLatest,
-    sleepAverages,
-    bpLatest,
-    bpAverages,
-    hrLatest,
-    bodyFatLatest,
-    medications,
-    hydration,
-  ] = await Promise.all([
+  const settled = await Promise.allSettled([
     safeCall(healthProfileService.getProfile(userId), "health_profile"),
     safeCall(bmiService.getLatest(userId), "bmi"),
     safeCall(weightService.getCurrentWeight(userId), "weight_current"),
@@ -110,16 +109,54 @@ export async function getDashboard(userId: string): Promise<DashboardResponse> {
     safeCall(hydrationService.getReminder(userId), "hydration"),
   ]);
 
+  const [
+    profile,
+    bmiLatest,
+    weightCurrent,
+    weightProgress,
+    calories,
+    water,
+    sleepLatest,
+    sleepAverages,
+    bpLatest,
+    bpAverages,
+    hrLatest,
+    bodyFatLatest,
+    medications,
+    hydration,
+  ] = [
+    unwrapSettled(settled[0], "health_profile"),
+    unwrapSettled(settled[1], "bmi"),
+    unwrapSettled(settled[2], "weight_current"),
+    unwrapSettled(settled[3], "weight_progress"),
+    unwrapSettled(settled[4], "calories"),
+    unwrapSettled(settled[5], "water"),
+    unwrapSettled(settled[6], "sleep_latest"),
+    unwrapSettled(settled[7], "sleep_averages"),
+    unwrapSettled(settled[8], "bp_latest"),
+    unwrapSettled(settled[9], "bp_averages"),
+    unwrapSettled(settled[10], "heart_rate"),
+    unwrapSettled(settled[11], "body_fat"),
+    unwrapSettled(settled[12], "medications"),
+    unwrapSettled(settled[13], "hydration"),
+  ];
+
   let womenSpecific: WomenSpecificSection | null = null;
 
   if (gender === "female") {
-    const [cycleStats, cyclePrediction, pregnancyCurrent, pregnancyProgress] =
-      await Promise.all([
-        safeCall(menstrualCycleService.getCycleStats(userId), "cycle_stats"),
-        safeCall(menstrualCycleService.predictNextPeriod(userId), "cycle_prediction"),
-        safeCall(pregnancyService.getCurrentPregnancy(userId), "pregnancy_current"),
-        safeCall(pregnancyService.getProgress(userId), "pregnancy_progress"),
-      ]);
+    const womenSettled = await Promise.allSettled([
+      safeCall(menstrualCycleService.getCycleStats(userId), "cycle_stats"),
+      safeCall(menstrualCycleService.predictNextPeriod(userId), "cycle_prediction"),
+      safeCall(pregnancyService.getCurrentPregnancy(userId), "pregnancy_current"),
+      safeCall(pregnancyService.getProgress(userId), "pregnancy_progress"),
+    ]);
+
+    const [cycleStats, cyclePrediction, pregnancyCurrent, pregnancyProgress] = [
+      unwrapSettled(womenSettled[0], "cycle_stats"),
+      unwrapSettled(womenSettled[1], "cycle_prediction"),
+      unwrapSettled(womenSettled[2], "pregnancy_current"),
+      unwrapSettled(womenSettled[3], "pregnancy_progress"),
+    ];
 
     womenSpecific = {
       cycle:
