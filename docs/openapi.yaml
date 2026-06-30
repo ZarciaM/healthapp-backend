@@ -2791,6 +2791,1225 @@ paths:
                 success: false
                 message: "Entrée de graisse corporelle introuvable"
 
+  ############################################################################
+  # DATA SHARING
+  ############################################################################
+
+  /data-sharing/invitations:
+    post:
+      tags: [DataSharing]
+      summary: "Créer une invitation de partage"
+      description: >
+        Crée un `DataShare` en base avec `status: "pending"` et tente
+        d'envoyer un email d'invitation au partenaire.
+
+        **Flow de bout en bout :**
+        1. L'utilisateur A (owner) envoie une invitation à l'email du
+           partenaire B, avec un `scope` (actuellement uniquement
+           `"menstrual_cycle"`)
+        2. Un `invitationToken` cryptographique (randomBytes 32) est
+           généré et stocké en base — **jamais exposé dans la réponse
+           API**, uniquement transmis par email
+        3. Le champ `emailSentSuccessfully` indique si l'email a été
+           délivré avec succès. Si `false`, l'invitation existe quand
+           même en base et peut être renvoyée via `POST /resend`
+
+        **Contrôles métier :**
+        - Impossible de s'inviter soi-même (400)
+        - Une invitation active (pending/accepted) pour le même
+          (owner, partnerEmail, scope) déjà existante → 409
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvitationInput"
+            example:
+              partnerEmail: "partner@example.com"
+              scope: "menstrual_cycle"
+      responses:
+        "201":
+          description: "Invitation créée (email envoyé ou non)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Invitation sent"
+                data:
+                  share:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    ownerId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    partnerEmail: "partner@example.com"
+                    scope: "menstrual_cycle"
+                    status: "pending"
+                    emailSentSuccessfully: true
+                    invitedAt: "2025-06-15T08:00:00.000Z"
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Données invalides ou auto-invitation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                selfInvite:
+                  summary: "Auto-invitation"
+                  value:
+                    success: false
+                    message: "You cannot invite yourself"
+                wrongScope:
+                  summary: "Scope invalide"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: "Invitation active déjà existante pour cet email et scope"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "An active invitation already exists for this email and scope"
+
+  /data-sharing/invitations/accept:
+    post:
+      tags: [DataSharing]
+      summary: "Accepter une invitation"
+      description: >
+        Accepte une invitation en fournissant le `invitationToken` reçu
+        par email. Le service vérifie que l'adresse email de
+        l'utilisateur connecté correspond à `partnerEmail` stockée en
+        base (sécurité anti-interception). Le `status` passe à
+        `"accepted"` et `partnerId` est renseigné.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RespondInvitationInput"
+            example:
+              invitationToken: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1"
+      responses:
+        "200":
+          description: "Invitation acceptée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Invitation accepted"
+                data:
+                  share:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    ownerId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    partnerId: "664a1b2c3d4e5f6a7b8c9d10"
+                    partnerEmail: "partner@example.com"
+                    scope: "menstrual_cycle"
+                    status: "accepted"
+                    emailSentSuccessfully: true
+                    invitedAt: "2025-06-15T08:00:00.000Z"
+                    respondedAt: "2025-06-16T08:00:00.000Z"
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-16T08:00:00.000Z"
+        "400":
+          description: "Invitation déjà traitée (status n'est plus pending)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "This invitation has already been accepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Email de l'utilisateur connecté ne correspond pas à partnerEmail"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "This invitation was sent to a different email address"
+        "404":
+          description: "Token d'invitation introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Invitation not found"
+
+  /data-sharing/invitations/decline:
+    post:
+      tags: [DataSharing]
+      summary: "Décliner une invitation"
+      description: >
+        Décline une invitation. Mêmes contrôles que `/accept` :
+        vérification du token, vérification de correspondance d'email,
+        protection anti-rejeu (status doit être "pending"). Le `status`
+        passe à `"declined"`.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RespondInvitationInput"
+            example:
+              invitationToken: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1"
+      responses:
+        "200":
+          description: "Invitation déclinée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Invitation declined"
+        "400":
+          description: "Invitation déjà traitée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Email de l'utilisateur connecté ne correspond pas à partnerEmail"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Token d'invitation introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /data-sharing/invitations/{id}/resend:
+    post:
+      tags: [DataSharing]
+      summary: "Renvoyer l'email d'invitation"
+      description: >
+        Renvoie l'email d'invitation avec le même `invitationToken`
+        (inchangé). Uniquement possible si le `status` est toujours
+        `"pending"`. Le propriétaire ne peut renvoyer que ses propres
+        invitations (vérification IDOR).
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId du DataShare"
+      responses:
+        "200":
+          description: "Email renvoyé (succès ou échec d'email)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Invitation email resent successfully"
+                data:
+                  emailSentSuccessfully: true
+        "400":
+          description: "L'invitation n'est plus en attente"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Cannot resend an invitation that is no longer pending"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Tentative de renvoi d'une invitation ne vous appartenant pas"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Share introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /data-sharing/owner:
+    get:
+      tags: [DataSharing]
+      summary: "Partages créés par moi"
+      description: >
+        Liste les partages actifs (status: "accepted") dont l'utilisateur
+        connecté est le propriétaire (owner). Les `partnerId` sont
+        populés avec les champs `firstName`, `lastName`, `email`.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Partages récupérés"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Active shares retrieved"
+                data:
+                  shares:
+                    - _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                      ownerId: "664a1b2c3d4e5f6a7b8c9d0f"
+                      partnerId:
+                        _id: "664a1b2c3d4e5f6a7b8c9d10"
+                        firstName: "Marie"
+                        lastName: "Dupont"
+                        email: "partner@example.com"
+                      partnerEmail: "partner@example.com"
+                      scope: "menstrual_cycle"
+                      status: "accepted"
+                      invitedAt: "2025-06-15T08:00:00.000Z"
+                      respondedAt: "2025-06-16T08:00:00.000Z"
+                      createdAt: "2025-06-15T08:00:00.000Z"
+                      updatedAt: "2025-06-16T08:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /data-sharing/partner:
+    get:
+      tags: [DataSharing]
+      summary: "Accès partagés dont je bénéficie"
+      description: >
+        Liste les accès partagés actifs (status: "accepted") dont
+        l'utilisateur connecté est le partenaire (partner). Les
+        `ownerId` sont populés avec les champs `firstName`,
+        `lastName`, `email`.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Accès partagés récupérés"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Active shared access retrieved"
+                data:
+                  shares:
+                    - _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                      ownerId:
+                        _id: "664a1b2c3d4e5f6a7b8c9d0f"
+                        firstName: "Jean"
+                        lastName: "Martin"
+                        email: "owner@example.com"
+                      partnerId: "664a1b2c3d4e5f6a7b8c9d10"
+                      partnerEmail: "partner@example.com"
+                      scope: "menstrual_cycle"
+                      status: "accepted"
+                      invitedAt: "2025-06-15T08:00:00.000Z"
+                      respondedAt: "2025-06-16T08:00:00.000Z"
+                      createdAt: "2025-06-15T08:00:00.000Z"
+                      updatedAt: "2025-06-16T08:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /data-sharing/{id}:
+    delete:
+      tags: [DataSharing]
+      summary: "Révoquer un partage"
+      description: >
+        Révoque immédiatement un partage. Le `status` passe à
+        `"revoked"` et `revokedAt` est renseigné. **La révocation est
+        immédiate**, sans délai de propagation : dès la mise à jour en
+        base, le partenaire perd l'accès aux données (vérifié par
+        `sharedAccessGuard` à chaque requête). Le propriétaire ne peut
+        révoquer que ses propres partages (vérification IDOR).
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId du DataShare à révoquer"
+      responses:
+        "200":
+          description: "Partage révoqué"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Access revoked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Tentative de révocation d'un partage ne vous appartenant pas"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "You can only revoke shares that you created"
+        "404":
+          description: "Share introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  ############################################################################
+  # MENSTRUAL CYCLE
+  ############################################################################
+
+  /menstrual-cycle:
+    post:
+      tags: [MenstrualCycle]
+      summary: "Enregistrer une entrée de cycle menstruel"
+      description: >
+        Crée une entrée de cycle menstruel pour l'utilisatrice connectée.
+
+        **Protection :** Cette route est protégée par `genderGuard(['female'])`
+        en plus de l'authentification standard — seules les utilisatrices
+        de genre `female` peuvent enregistrer leurs cycles. Un partenaire
+        avec accès partagé **ne peut pas** créer d'entrée pour une autre
+        personne (réservée à la propriétaire).
+
+        **Champs :**
+        - `periodStartDate` (required) : date de début des règles en
+          format `YYYY-MM-DD`. Ne peut pas être dans le futur. Indexé
+          unique avec `userId` (pas de doublon possible pour une même
+          date).
+        - `periodEndDate` (optionnel) : doit être après
+          `periodStartDate` et ne pas dépasser 10 jours d'écart
+        - `flow` (optionnel) : flux menstruel (`light`, `medium`,
+          `heavy`)
+        - `symptoms` (optionnel) : tableau de symptômes (cramps,
+          headache, fatigue, bloating, breast_tenderness, mood_swings,
+          nausea, back_pain, acne, spotting, insomnia, dizziness)
+        - `notes` (optionnel) : notes libres (max 500 caractères)
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCycleEntryInput"
+            example:
+              periodStartDate: "2025-06-15"
+              periodEndDate: "2025-06-19"
+              flow: "medium"
+              symptoms: ["cramps", "fatigue"]
+      responses:
+        "201":
+          description: "Entrée de cycle créée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Cycle entry created"
+                data:
+                  entry:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    periodStartDate: "2025-06-15T00:00:00.000Z"
+                    periodEndDate: "2025-06-19T00:00:00.000Z"
+                    flow: "medium"
+                    symptoms: ["cramps", "fatigue"]
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Données invalides (validation Zod)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                endBeforeStart:
+                  summary: "periodEndDate avant periodStartDate"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "custom"
+                        path: ["periodEndDate"]
+                        message: "periodEndDate must be after periodStartDate"
+                periodTooLong:
+                  summary: "Écart > 10 jours"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "custom"
+                        path: ["periodEndDate"]
+                        message: "periodEndDate must not exceed 10 days after periodStartDate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Genre non autorisé (genderGuard : seules les femmes peuvent créer des entrées)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "Entrée déjà existante pour cette date (contrainte unique userId + periodStartDate)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "A cycle entry already exists for this date"
+
+  /menstrual-cycle/{ownerId}/history:
+    get:
+      tags: [MenstrualCycle]
+      summary: "Historique des cycles"
+      description: >
+        Retourne l'historique des cycles menstruels.
+
+        **Contrôle d'accès :**
+        - Si `ownerId` correspond à l'utilisateur connecté, accès direct
+        - Sinon, nécessite un `DataShare` actif avec `scope:
+          "menstrual_cycle"` entre la propriétaire et l'utilisateur
+          connecté (vérifié par `sharedAccessGuard`), sinon 403
+
+        Les paramètres `fromDate` et `toDate` filtrent par plage de
+        dates sur `periodStartDate`. Le paramètre `limit` contrôle le
+        nombre de résultats.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: ownerId
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId de la propriétaire des données"
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: "Nombre d'entrées (doit être un entier positif)"
+        - in: query
+          name: fromDate
+          required: false
+          schema:
+            type: string
+            format: date
+          description: "Borne inférieure (incluse) sur periodStartDate (format YYYY-MM-DD)"
+        - in: query
+          name: toDate
+          required: false
+          schema:
+            type: string
+            format: date
+          description: "Borne supérieure (incluse) sur periodStartDate (format YYYY-MM-DD)"
+      responses:
+        "200":
+          description: "Historique récupéré"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Cycle history retrieved"
+                data:
+                  entries:
+                    - _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                      userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                      periodStartDate: "2025-06-15T00:00:00.000Z"
+                      periodEndDate: "2025-06-19T00:00:00.000Z"
+                      flow: "medium"
+                      symptoms: ["cramps", "fatigue"]
+                      createdAt: "2025-06-15T08:00:00.000Z"
+                      updatedAt: "2025-06-15T08:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Accès non partagé (sharedAccessGuard)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /menstrual-cycle/{ownerId}/stats:
+    get:
+      tags: [MenstrualCycle]
+      summary: "Statistiques du cycle"
+      description: >
+        Retourne les statistiques du cycle menstruel : durée moyenne,
+        régularité et niveau de confiance.
+
+        **Contrôle d'accès :** Même mécanisme que `/history` — si
+        `ownerId` n'est pas l'utilisateur connecté, un DataShare actif
+        avec `scope: "menstrual_cycle"` est requis.
+
+        **Niveau de confiance (`confidenceLevel`) :**
+        - `"low"` : moins de 3 cycles analysés, ou cycles irréguliers
+        - `"medium"` : 3 à 5 cycles réguliers
+        - `"high"` : plus de 5 cycles réguliers
+
+        Si moins de 2 entrées sont enregistrées, `averageLength` est
+        `null` et `cyclesAnalyzed` est 0.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: ownerId
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId de la propriétaire des données"
+      responses:
+        "200":
+          description: "Statistiques récupérées"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Cycle stats retrieved"
+                data:
+                  stats:
+                    averageLength: 28
+                    isRegular: true
+                    confidenceLevel: "high"
+                    cyclesAnalyzed: 6
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Accès non partagé (sharedAccessGuard)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /menstrual-cycle/{ownerId}/prediction:
+    get:
+      tags: [MenstrualCycle]
+      summary: "Prédiction des prochaines règles"
+      description: >
+        Prédit la date estimée des prochaines règles à partir des
+        cycles enregistrés.
+
+        **Contrôle d'accès :** Même mécanisme que `/history` — accès
+        direct si `ownerId` correspond à l'utilisateur connecté,
+        sinon DataShare actif requis.
+
+        **Plages selon `confidenceLevel` :**
+        - `"high"` : plage de ±2 jours autour de la date estimée
+        - `"medium"` : plage de ±4 jours
+        - `"low"` : plage de ±7 jours
+
+        Si les données sont insuffisantes (`averageLength === null`),
+        retourne une erreur 400 avec un message invitant à continuer
+        d'enregistrer les cycles.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: ownerId
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId de la propriétaire des données"
+      responses:
+        "200":
+          description: "Prédiction calculée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Next period prediction"
+                data:
+                  estimatedDate: "2025-07-13T00:00:00.000Z"
+                  rangeStart: "2025-07-11T00:00:00.000Z"
+                  rangeEnd: "2025-07-15T00:00:00.000Z"
+                  confidenceLevel: "high"
+                  basedOnCyclesCount: 6
+        "400":
+          description: "Données insuffisantes pour la prédiction"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Pas assez de données pour estimer votre cycle, continuez à enregistrer vos prochaines règles"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Accès non partagé (sharedAccessGuard)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /menstrual-cycle/{ownerId}/fertile-window:
+    get:
+      tags: [MenstrualCycle]
+      summary: "Fenêtre de fertilité"
+      description: >
+        Prédit la fenêtre de fertilité (période d'ovulation estimée
+        et fenêtre fertile élargie).
+
+        **Contrôle d'accès :** Même mécanisme que `/history`.
+
+        **Disclaimer obligatoire :**
+        La réponse inclut toujours un champ `disclaimer` dont le texte
+        exact est le suivant :
+
+        > *"Cette estimation est basée sur un calcul calendaire et ne
+        constitue pas une méthode fiable de contraception ou de
+        conception. Les cycles naturels varient et l'ovulation peut
+        survenir à des dates différentes de cette estimation.
+        Consultez un professionnel de santé pour des méthodes de suivi
+        de fertilité plus précises si nécessaire."*
+
+        **Plages selon `confidenceLevel` :**
+        Le niveau de confiance (`"low"`, `"medium"`, `"high"`) élargit
+        ou réduit les plages : plus le niveau est élevé, plus la
+        fenêtre est resserrée autour de la date d'ovulation estimée.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: ownerId
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId de la propriétaire des données"
+      responses:
+        "200":
+          description: "Fenêtre de fertilité calculée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Fertile window prediction"
+                data:
+                  estimatedOvulationDate: "2025-06-29T00:00:00.000Z"
+                  fertileWindowStart: "2025-06-24T00:00:00.000Z"
+                  fertileWindowEnd: "2025-07-01T00:00:00.000Z"
+                  confidenceLevel: "high"
+                  basedOnCyclesCount: 6
+                  disclaimer: "Cette estimation est basée sur un calcul calendaire et ne constitue pas une méthode fiable de contraception ou de conception. Les cycles naturels varient et l'ovulation peut survenir à des dates différentes de cette estimation. Consultez un professionnel de santé pour des méthodes de suivi de fertilité plus précises si nécessaire."
+        "400":
+          description: "Données insuffisantes"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Pas assez de données pour estimer votre fenêtre de fertilité, continuez à enregistrer vos prochaines règles"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Accès non partagé (sharedAccessGuard)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /menstrual-cycle/{ownerId}/{id}:
+    delete:
+      tags: [MenstrualCycle]
+      summary: "Supprimer une entrée de cycle"
+      description: >
+        Supprime une entrée de cycle menstruel.
+
+        **Réservée à la propriétaire uniquement :** contrairement aux
+        routes GET (qui peuvent être consultées via un partage), la
+        suppression est **exclusivement réservée à l'utilisatrice
+        propriétaire** des données. Un partenaire avec accès partagé
+        ne peut pas supprimer une entrée. Le contrôle se fait par
+        comparaison directe `req.user!.userId !== ownerId` dans le
+        contrôleur (403).
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: ownerId
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId de la propriétaire"
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId de l'entrée de cycle"
+      responses:
+        "200":
+          description: "Entrée supprimée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Cycle entry deleted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Tentative de suppression par un partenaire ou un autre utilisateur"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "You can only delete your own cycle entries"
+        "404":
+          description: "Entrée introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Cycle entry not found"
+
+  ############################################################################
+  # PREGNANCY
+  ############################################################################
+
+  /pregnancy:
+    post:
+      tags: [Pregnancy]
+      summary: "Démarrer un suivi de grossesse"
+      description: >
+        Crée un profil de grossesse avec calcul de la date d'accouchement
+        (DDR) selon la méthode choisie.
+
+        **Protection :** Toutes les routes Pregnancy sont protégées par
+        `genderGuard(['female'])` en plus de l'authentification standard
+        (réservé aux utilisatrices de genre `female`).
+
+        **Méthodes de calcul :**
+        - `"lmp"` : basé sur la date des dernières règles. La DDR est
+          calculée selon la **règle de Naegele** (DDR + 280 jours).
+          Le champ `lastMenstrualPeriod` est requis ; `conceptionDate`
+          ne doit pas être fourni.
+        - `"conception"` : basé sur la date de conception présumée.
+          La DDR est calculée comme conception + 266 jours. Le champ
+          `conceptionDate` est requis ; `lastMenstrualPeriod` ne doit
+          pas être fourni.
+
+        **Contraintes de validation (superRefine) :**
+        - `calculationMethod === "lmp"` → `lastMenstrualPeriod` requis,
+          doit être ≤ aujourd'hui et ≤ 301 jours (43 sem.) dans le passé
+        - `calculationMethod === "conception"` → `conceptionDate`
+          requis, doit être ≤ aujourd'hui et ≤ 287 jours (41 sem.)
+          dans le passé
+        - Les deux dates s'excluent mutuellement
+
+        **Règle d'unicité :** Une seule grossesse active
+        (`isActive: true`) par utilisatrice à la fois. Une tentative
+        d'en créer une seconde retourne 409. Une fois close, une
+        nouvelle peut être démarrée.
+
+        **DDR figée :** La `dueDate` est calculée **une seule fois**
+        à la création et stockée en base. Elle n'est jamais recalculée
+        dynamiquement (les calculs d'âge gestationnel se basent sur
+        cette valeur figée et la date courante).
+
+        **Milestones de grossesse :**
+        Le contenu des jalons (`pregnancyMilestones.data.ts`) est
+        sourcé depuis des références médicales reconnues (Mayo Clinic,
+        ACOG, Cleveland Clinic, NHS) et couvre les semaines 1 à 40.
+        La documentation API décrit la structure de réponse sans
+        dupliquer le contenu détaillé des jalons.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePregnancyInput"
+            examples:
+              lmp:
+                summary: "Méthode LMP"
+                value:
+                  calculationMethod: "lmp"
+                  lastMenstrualPeriod: "2025-03-01"
+              conception:
+                summary: "Méthode conception"
+                value:
+                  calculationMethod: "conception"
+                  conceptionDate: "2025-03-15"
+      responses:
+        "201":
+          description: "Profil de grossesse créé"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Pregnancy profile created"
+                data:
+                  pregnancy:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    calculationMethod: "lmp"
+                    lastMenstrualPeriod: "2025-03-01T00:00:00.000Z"
+                    dueDate: "2025-12-06T00:00:00.000Z"
+                    isActive: true
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Données invalides"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingLmp:
+                  summary: "LMP manquant pour méthode lmp"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "custom"
+                        path: ["lastMenstrualPeriod"]
+                        message: "lastMenstrualPeriod is required when calculationMethod is 'lmp'"
+                wrongDateProvided:
+                  summary: "conceptionDate fourni avec méthode lmp"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "custom"
+                        path: ["conceptionDate"]
+                        message: "conceptionDate must not be provided when calculationMethod is 'lmp'"
+                tooOld:
+                  summary: "Date trop ancienne (incohérente avec grossesse active)"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "custom"
+                        path: ["lastMenstrualPeriod"]
+                        message: "lastMenstrualPeriod is more than 43 weeks ago, which is inconsistent with an active pregnancy"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Genre non autorisé (genderGuard : réservé aux femmes)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "Une grossesse active existe déjà"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Une grossesse est déjà en cours de suivi, terminez-la avant d'en démarrer une nouvelle"
+
+  /pregnancy/current:
+    get:
+      tags: [Pregnancy]
+      summary: "Grossesse active en cours"
+      description: >
+        Retourne le profil de grossesse actif (isActive: true) de
+        l'utilisatrice connectée. **La réponse peut être
+        `{ data: { pregnancy: null } }` si aucune grossesse active
+        n'existe — ce n'est PAS une erreur 404.**
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Grossesse active (peut être null)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                found:
+                  summary: "Grossesse active trouvée"
+                  value:
+                    success: true
+                    message: "Active pregnancy retrieved"
+                    data:
+                      pregnancy:
+                        _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        calculationMethod: "lmp"
+                        lastMenstrualPeriod: "2025-03-01T00:00:00.000Z"
+                        dueDate: "2025-12-06T00:00:00.000Z"
+                        isActive: true
+                        createdAt: "2025-06-15T08:00:00.000Z"
+                        updatedAt: "2025-06-15T08:00:00.000Z"
+                notFound:
+                  summary: "Aucune grossesse active"
+                  value:
+                    success: true
+                    message: "No active pregnancy"
+                    data:
+                      pregnancy: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Genre non autorisé"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /pregnancy/progress:
+    get:
+      tags: [Pregnancy]
+      summary: "Progression de la grossesse"
+      description: >
+        Retourne la progression détaillée de la grossesse active :
+        âge gestationnel, jours restants avant la DDR, et jalon
+        correspondant à la semaine en cours.
+
+        **Structure de réponse :**
+        - `pregnancy` : le profil de grossesse
+        - `gestationalAge` : `{ weeks, days, trimester (1|2|3),
+          anomaly }` calculé par `calculateGestationalAge` à partir
+          de la `dueDate` figée et de la date courante
+        - `daysUntilDueDate` : nombre de jours avant la DDR. **Peut
+          être négatif** si le terme est dépassé (post-term). Le
+          message reste factuel et non alarmiste, orientant vers un
+          professionnel de santé si nécessaire.
+        - `currentMilestone` : jalon de la semaine en cours (objet
+          avec `{ weekNumber, title, description, icon }`) ou `null`
+          si en période pré-conception (`anomaly: "pre_conception"`).
+          Les jalons sont sourcés depuis Mayo Clinic, ACOG, Cleveland
+          Clinic et NHS.
+
+        Retourne 400 si aucune grossesse active n'existe.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Progression récupérée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Pregnancy progress retrieved"
+                data:
+                  pregnancy:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    calculationMethod: "lmp"
+                    lastMenstrualPeriod: "2025-03-01T00:00:00.000Z"
+                    dueDate: "2025-12-06T00:00:00.000Z"
+                    isActive: true
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-15T08:00:00.000Z"
+                  gestationalAge:
+                    weeks: 15
+                    days: 2
+                    trimester: 2
+                    anomaly: null
+                  daysUntilDueDate: 174
+                  currentMilestone:
+                    weekNumber: 15
+                    title: "Semaine 15"
+                    description: "Bébé bouge et entend votre voix."
+                    icon: "🤰"
+        "400":
+          description: "Aucune grossesse active"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Aucune grossesse active trouvée"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Genre non autorisé"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /pregnancy/{id}/close:
+    patch:
+      tags: [Pregnancy]
+      summary: "Clôturer une grossesse"
+      description: >
+        Ferme un profil de grossesse en passant `isActive` à `false`.
+        Cela libère la possibilité d'en suivre une nouvelle tout en
+        conservant l'historique. Seule la propriétaire peut clôturer
+        sa grossesse (vérification IDOR).
+
+        Le champ optionnel `outcome` permet de documenter l'issue
+        (`live_birth`, `stillbirth`, `miscarriage`, `abortion`,
+        `other`).
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId du profil de grossesse à clôturer"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                outcome:
+                  type: string
+                  enum: [live_birth, stillbirth, miscarriage, abortion, other]
+                  description: "Issue de la grossesse (optionnelle)"
+                  example: "live_birth"
+      responses:
+        "200":
+          description: "Profil de grossesse clôturé"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Pregnancy profile closed"
+                data:
+                  pregnancy:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    calculationMethod: "lmp"
+                    lastMenstrualPeriod: "2025-03-01T00:00:00.000Z"
+                    dueDate: "2025-12-06T00:00:00.000Z"
+                    isActive: false
+                    outcome: "live_birth"
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-12-06T08:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Genre non autorisé ou tentative de clôture d'une grossesse ne vous appartenant pas"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "You can only close your own pregnancy profile"
+        "404":
+          description: "Profil de grossesse introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Pregnancy profile not found"
+
+  /pregnancy/history:
+    get:
+      tags: [Pregnancy]
+      summary: "Historique des grossesses"
+      description: >
+        Liste toutes les grossesses (actives et fermées) de
+        l'utilisatrice connectée, triées par date de création
+        décroissante.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Historique récupéré"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Pregnancy history retrieved"
+                data:
+                  pregnancies:
+                    - _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                      userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                      calculationMethod: "lmp"
+                      lastMenstrualPeriod: "2025-03-01T00:00:00.000Z"
+                      dueDate: "2025-12-06T00:00:00.000Z"
+                      isActive: false
+                      outcome: "live_birth"
+                      createdAt: "2025-06-15T08:00:00.000Z"
+                      updatedAt: "2025-12-06T08:00:00.000Z"
+                    - _id: "664a1b2c3d4e5f6a7b8c9d10"
+                      userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                      calculationMethod: "conception"
+                      conceptionDate: "2024-06-01T00:00:00.000Z"
+                      dueDate: "2025-02-22T00:00:00.000Z"
+                      isActive: false
+                      outcome: "miscarriage"
+                      createdAt: "2024-05-01T08:00:00.000Z"
+                      updatedAt: "2024-07-15T08:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Genre non autorisé"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -3813,6 +5032,388 @@ components:
           format: date-time
           description: "Date de la mesure (optionnelle, défaut: Date.now). Ne peut pas être dans le futur."
           example: "2025-06-15T08:00:00.000Z"
+
+    CycleEntry:
+      type: object
+      description: "Entrée de cycle menstruel"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        userId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0f"
+        periodStartDate:
+          type: string
+          format: date
+          description: "Date de début des règles"
+          example: "2025-06-15"
+        periodEndDate:
+          type: string
+          format: date
+          nullable: true
+          description: "Date de fin des règles (optionnelle)"
+          example: "2025-06-19"
+        flow:
+          type: string
+          nullable: true
+          enum: [light, medium, heavy]
+          description: "Flux menstruel"
+          example: "medium"
+        symptoms:
+          type: array
+          nullable: true
+          items:
+            type: string
+            enum: [cramps, headache, fatigue, bloating, breast_tenderness, mood_swings, nausea, back_pain, acne, spotting, insomnia, dizziness]
+          description: "Symptômes associés"
+          example: ["cramps", "fatigue"]
+        notes:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: "Notes libres (max 500 caractères)"
+          example: "Règles douloureuses ce mois-ci"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateCycleEntryInput:
+      type: object
+      description: "Payload pour créer une entrée de cycle menstruel"
+      required: [periodStartDate]
+      properties:
+        periodStartDate:
+          type: string
+          format: date
+          description: "Date de début des règles (YYYY-MM-DD). Ne peut pas être dans le futur. Unique par utilisatrice."
+          example: "2025-06-15"
+        periodEndDate:
+          type: string
+          format: date
+          description: "Date de fin des règles (YYYY-MM-DD). Doit être après periodStartDate, écart max 10 jours."
+          example: "2025-06-19"
+        flow:
+          type: string
+          enum: [light, medium, heavy]
+          description: "Flux menstruel"
+          example: "medium"
+        symptoms:
+          type: array
+          items:
+            type: string
+            enum: [cramps, headache, fatigue, bloating, breast_tenderness, mood_swings, nausea, back_pain, acne, spotting, insomnia, dizziness]
+          example: ["cramps", "fatigue"]
+        notes:
+          type: string
+          maxLength: 500
+          description: "Notes libres (max 500 caractères)"
+          example: "Règles douloureuses ce mois-ci"
+
+    DataShare:
+      type: object
+      description: "Partage de données entre utilisateurs (sans invitationToken — jamais exposé)"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        ownerId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          description: "Utilisateur qui partage ses données"
+          example: "664a1b2c3d4e5f6a7b8c9d0f"
+        partnerId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          nullable: true
+          description: "Partenaire ayant accepté (null si pending)"
+          example: "664a1b2c3d4e5f6a7b8c9d10"
+        partnerEmail:
+          type: string
+          format: email
+          description: "Email du partenaire invité (normalisé en minuscules)"
+          example: "partner@example.com"
+        scope:
+          type: string
+          enum: [menstrual_cycle]
+          description: "Périmètre du partage"
+          example: "menstrual_cycle"
+        status:
+          type: string
+          enum: [pending, accepted, revoked, declined]
+          description: "Statut de l'invitation"
+          example: "accepted"
+        emailSentSuccessfully:
+          type: boolean
+          description: "L'email d'invitation a-t-il été délivré avec succès ?"
+          example: true
+        invitedAt:
+          type: string
+          format: date-time
+          description: "Date d'envoi de l'invitation"
+        respondedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Date de réponse (acceptation/refus)"
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Date de révocation"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateInvitationInput:
+      type: object
+      description: "Payload pour créer une invitation de partage"
+      required: [partnerEmail, scope]
+      properties:
+        partnerEmail:
+          type: string
+          format: email
+          description: "Email du partenaire à inviter"
+          example: "partner@example.com"
+        scope:
+          type: string
+          enum: [menstrual_cycle]
+          description: "Périmètre du partage"
+          example: "menstrual_cycle"
+
+    RespondInvitationInput:
+      type: object
+      description: "Payload pour accepter/décliner une invitation"
+      required: [invitationToken]
+      properties:
+        invitationToken:
+          type: string
+          description: "Token d'invitation reçu par email (hex, 64 caractères)"
+          example: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1"
+
+    CycleStats:
+      type: object
+      description: "Statistiques du cycle menstruel (contenu dans data.stats)"
+      properties:
+        averageLength:
+          type: number
+          nullable: true
+          description: "Durée moyenne du cycle en jours (null si < 2 entrées)"
+          example: 28
+        isRegular:
+          type: boolean
+          description: "Le cycle est-il régulier (écart max-min ≤ 7 jours) ?"
+          example: true
+        confidenceLevel:
+          type: string
+          enum: [low, medium, high]
+          description: "Niveau de confiance (low: < 3 cycles ou irrégulier, medium: 3-5, high: > 5)"
+          example: "high"
+        cyclesAnalyzed:
+          type: integer
+          description: "Nombre de cycles analysés (0 si < 2 entrées)"
+          example: 6
+
+    CyclePrediction:
+      type: object
+      description: "Prédiction des prochaines règles (contenu dans data)"
+      properties:
+        estimatedDate:
+          type: string
+          format: date-time
+          description: "Date estimée des prochaines règles"
+          example: "2025-07-13T00:00:00.000Z"
+        rangeStart:
+          type: string
+          format: date-time
+          description: "Début de la plage de prédiction (élargie selon confidenceLevel)"
+          example: "2025-07-11T00:00:00.000Z"
+        rangeEnd:
+          type: string
+          format: date-time
+          description: "Fin de la plage de prédiction"
+          example: "2025-07-15T00:00:00.000Z"
+        confidenceLevel:
+          type: string
+          enum: [low, medium, high]
+          description: "Niveau de confiance de la prédiction"
+          example: "high"
+        basedOnCyclesCount:
+          type: integer
+          description: "Nombre de cycles utilisés pour la prédiction"
+          example: 6
+
+    FertileWindowPrediction:
+      type: object
+      description: "Prédiction de la fenêtre de fertilité (contenu dans data)"
+      properties:
+        estimatedOvulationDate:
+          type: string
+          format: date-time
+          description: "Date d'ovulation estimée"
+          example: "2025-06-29T00:00:00.000Z"
+        fertileWindowStart:
+          type: string
+          format: date-time
+          description: "Début de la fenêtre fertile (élargie selon confidenceLevel)"
+          example: "2025-06-24T00:00:00.000Z"
+        fertileWindowEnd:
+          type: string
+          format: date-time
+          description: "Fin de la fenêtre fertile"
+          example: "2025-07-01T00:00:00.000Z"
+        confidenceLevel:
+          type: string
+          enum: [low, medium, high]
+          description: "Niveau de confiance"
+          example: "high"
+        basedOnCyclesCount:
+          type: integer
+          description: "Nombre de cycles utilisés"
+          example: 6
+        disclaimer:
+          type: string
+          description: "Avertissement obligatoire : cette estimation ne constitue pas une méthode fiable de contraception ou de conception"
+          example: "Cette estimation est basée sur un calcul calendaire et ne constitue pas une méthode fiable de contraception ou de conception. Les cycles naturels varient et l'ovulation peut survenir à des dates différentes de cette estimation. Consultez un professionnel de santé pour des méthodes de suivi de fertilité plus précises si nécessaire."
+
+    PregnancyProfile:
+      type: object
+      description: "Profil de suivi de grossesse"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        userId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0f"
+        calculationMethod:
+          type: string
+          enum: [lmp, conception]
+          description: "Méthode de calcul de la DDR"
+          example: "lmp"
+        lastMenstrualPeriod:
+          type: string
+          format: date
+          nullable: true
+          description: "Date des dernières règles (si méthode lmp)"
+          example: "2025-03-01"
+        conceptionDate:
+          type: string
+          format: date
+          nullable: true
+          description: "Date de conception présumée (si méthode conception)"
+          example: null
+        dueDate:
+          type: string
+          format: date-time
+          description: "Date d'accouchement estimée (calculée et figée à la création)"
+          example: "2025-12-06T00:00:00.000Z"
+        isActive:
+          type: boolean
+          description: "La grossesse est-elle en cours de suivi ?"
+          example: true
+        outcome:
+          type: string
+          nullable: true
+          enum: [live_birth, stillbirth, miscarriage, abortion, other]
+          description: "Issue de la grossesse (renseignée lors de la clôture)"
+          example: null
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreatePregnancyInput:
+      type: object
+      description: "Payload pour créer un profil de grossesse"
+      required: [calculationMethod]
+      properties:
+        calculationMethod:
+          type: string
+          enum: [lmp, conception]
+          description: "Méthode de calcul (soit lmp, soit conception)"
+          example: "lmp"
+        lastMenstrualPeriod:
+          type: string
+          format: date
+          description: "Date des dernières règles (YYYY-MM-DD). Requise si calculationMethod='lmp'. Ne doit pas être fournie si calculationMethod='conception'. ≤ aujourd'hui, ≤ 301 jours dans le passé."
+          example: "2025-03-01"
+        conceptionDate:
+          type: string
+          format: date
+          description: "Date de conception (YYYY-MM-DD). Requise si calculationMethod='conception'. Ne doit pas être fournie si calculationMethod='lmp'. ≤ aujourd'hui, ≤ 287 jours dans le passé."
+          example: null
+
+    PregnancyGestationalAge:
+      type: object
+      description: "Âge gestationnel calculé"
+      properties:
+        weeks:
+          type: integer
+          example: 15
+        days:
+          type: integer
+          example: 2
+        trimester:
+          type: integer
+          enum: [1, 2, 3]
+          example: 2
+        anomaly:
+          type: string
+          nullable: true
+          enum: [post_term, pre_conception]
+          description: "Anomalie éventuelle (null si normal, post_term si terme dépassé, pre_conception si avant conception)"
+          example: null
+
+    PregnancyMilestone:
+      type: object
+      description: "Jalon de grossesse pour une semaine donnée"
+      properties:
+        weekNumber:
+          type: integer
+          minimum: 1
+          maximum: 40
+          example: 15
+        title:
+          type: string
+          example: "Semaine 15"
+        description:
+          type: string
+          example: "Bébé bouge et entend votre voix."
+        icon:
+          type: string
+          example: "🤰"
+
+    PregnancyProgress:
+      type: object
+      description: "Progression détaillée de la grossesse (contenu dans data)"
+      properties:
+        pregnancy:
+          $ref: "#/components/schemas/PregnancyProfile"
+        gestationalAge:
+          $ref: "#/components/schemas/PregnancyGestationalAge"
+        daysUntilDueDate:
+          type: integer
+          description: "Jours avant la DDR (peut être négatif si terme dépassé)"
+          example: 174
+        currentMilestone:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/PregnancyMilestone"
+          description: "Jalon de la semaine en cours (null si période pré-conception)"
 
   responses:
     Unauthorized:
