@@ -25,6 +25,7 @@ import dataSharingRoutes from "./modules/dataSharing/dataSharing.routes.js";
 import menstrualCycleRoutes from "./modules/menstrualCycle/menstrualCycle.routes.js";
 import pregnancyRoutes from "./modules/pregnancy/pregnancy.routes.js";
 import hydrationRoutes from "./modules/hydration/hydration.routes.js";
+import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 
 const app = express();
 
@@ -67,6 +68,7 @@ app.use("/api/data-sharing", dataSharingRoutes);
 app.use("/api/menstrual-cycle", menstrualCycleRoutes);
 app.use("/api/pregnancy", pregnancyRoutes);
 app.use("/api/hydration", hydrationRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
