@@ -2071,6 +2071,726 @@ paths:
                 success: false
                 message: "Entrée de pression artérielle introuvable"
 
+  /heart-rate/zones:
+    get:
+      tags: [HeartRate]
+      summary: "Calculer les zones de fréquence cardiaque"
+      description: >
+        Calcule la fréquence cardiaque maximale et les 5 zones d'effort
+        à partir de l'âge et du genre de l'utilisateur.
+
+        **Formules utilisées selon le genre :**
+        - gender: **female** → **Gulati** : `FCM = 206 - 0.88 × âge`
+        - gender: **male** → **Fox** : `FCM = 220 - âge`
+
+        Une formule **alternative (Tanaka)** est toujours incluse en
+        complément (`FCM = 208 - 0.7 × âge`) dans la réponse, présentée
+        de façon neutre sans suggérer qu'une formule est meilleure que
+        l'autre.
+
+        **Query param :**
+        - `?age=N` (optionnel) — surcharge l'âge calculé depuis la date
+          de naissance du profil utilisateur (`ageSource: "override"`).
+          L'âge doit être un entier entre 1 et 150.
+
+        **Structure de réponse :**
+        - `maxHeartRate` : FCM selon la formule principale
+        - `formula` : nom de la formule utilisée ("Gulati" ou "Fox")
+        - `alternative` : `{ maxHeartRate, formula }` avec Tanaka
+        - `zones` : 5 zones d'effort (min, max, label) basées sur la
+          formule principale
+        - `alternativeZones` : 5 zones d'effort basées sur Tanaka
+        - `age`, `gender`, `ageSource`
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: age
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 150
+          description: "Âge en années (optionnel, surcharge celui du profil)"
+      responses:
+        "200":
+          description: "Zones de fréquence cardiaque calculées"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Zones de fréquence cardiaque calculées"
+                data:
+                  result:
+                    maxHeartRate: 185
+                    formula: "Fox"
+                    alternative:
+                      maxHeartRate: 173
+                      formula: "Tanaka"
+                    zones:
+                      zone1_warmup:
+                        min: 93
+                        max: 111
+                        label: "Échauffement"
+                      zone2_fatBurn:
+                        min: 111
+                        max: 130
+                        label: "Combustion des graisses"
+                      zone3_cardio:
+                        min: 130
+                        max: 148
+                        label: "Cardio"
+                      zone4_hardcore:
+                        min: 148
+                        max: 167
+                        label: "Intensité élevée"
+                      zone5_peak:
+                        min: 167
+                        max: 185
+                        label: "Zone maximale"
+                    alternativeZones:
+                      zone1_warmup:
+                        min: 87
+                        max: 104
+                        label: "Échauffement"
+                      zone2_fatBurn:
+                        min: 104
+                        max: 121
+                        label: "Combustion des graisses"
+                      zone3_cardio:
+                        min: 121
+                        max: 138
+                        label: "Cardio"
+                      zone4_hardcore:
+                        min: 138
+                        max: 156
+                        label: "Intensité élevée"
+                      zone5_peak:
+                        min: 156
+                        max: 173
+                        label: "Zone maximale"
+                    age: 35
+                    gender: "male"
+                    ageSource: "profile"
+        "400":
+          description: "Âge invalide ou date de naissance manquante"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidAge:
+                  summary: "Âge hors limites"
+                  value:
+                    success: false
+                    message: "L'âge doit être un entier compris entre 1 et 150"
+                missingBirthDate:
+                  summary: "Pas de date de naissance ni d'âge fourni"
+                  value:
+                    success: false
+                    message: "Date de naissance manquante dans votre profil. Fournissez un âge ou renseignez votre date de naissance."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /heart-rate:
+    post:
+      tags: [HeartRate]
+      summary: "Enregistrer une mesure de fréquence cardiaque"
+      description: >
+        Crée une entrée de fréquence cardiaque. Le champ `context`
+        influence l'interprétation du BPM et le message retourné.
+
+        **Interprétation selon le contexte :**
+        - `resting` (défaut) : le BPM est évalué par `getPulseCategory`
+          (bradycardie < 60, normal 60-100, tachycardie > 100)
+        - `after_exercise` : si BPM > 100, la catégorie devient
+          `post_exercise_elevation` avec un message rassurant indiquant
+          que c'est normal après un effort. Pour tout BPM après
+          exercice, le message invite à comparer à contexte similaire.
+          **Ce traitement évite d'alarmer inutilement** l'utilisateur
+          sur une mesure post-exercice normale.
+        - `other` : interprétation standard de `getPulseCategory`
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHeartRateEntryInput"
+            example:
+              bpm: 72
+              context: "resting"
+              recordedAt: "2025-06-15T08:00:00.000Z"
+      responses:
+        "201":
+          description: "Entrée de fréquence cardiaque créée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Entrée de fréquence cardiaque créée"
+                data:
+                  entry:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    bpm: 72
+                    category: "normal"
+                    context: "resting"
+                    message: "Votre pouls est dans les valeurs normales au repos."
+                    recordedAt: "2025-06-15T08:00:00.000Z"
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Données invalides (validation Zod)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /heart-rate/history:
+    get:
+      tags: [HeartRate]
+      summary: "Historique des mesures de fréquence cardiaque"
+      description: >
+        Retourne la liste des mesures de fréquence cardiaque, triées par
+        `recordedAt` décroissant. Les paramètres `from` et `to` filtrent
+        par plage de dates. `from` doit précéder `to` si les deux sont
+        fournis. Le paramètre `limit` contrôle le nombre de résultats
+        (défaut 50, max 200).
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: "Nombre d'entrées (doit être un entier positif)"
+        - in: query
+          name: from
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Borne inférieure (incluse) sur recordedAt"
+        - in: query
+          name: to
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Borne supérieure (incluse) sur recordedAt"
+      responses:
+        "200":
+          description: "Historique récupéré"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Historique récupéré"
+                data:
+                  entries:
+                    - _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                      userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                      bpm: 72
+                      category: "normal"
+                      context: "resting"
+                      recordedAt: "2025-06-15T08:00:00.000Z"
+                      createdAt: "2025-06-15T08:00:00.000Z"
+                      updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Paramètre invalide (limit non entier, from > to, dates invalides)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /heart-rate/latest:
+    get:
+      tags: [HeartRate]
+      summary: "Dernière mesure de fréquence cardiaque"
+      description: >
+        Retourne la mesure de fréquence cardiaque la plus récente (triée
+        par `recordedAt` décroissant). **La réponse peut être
+        `{ data: { entry: null } }` si aucune mesure n'existe —
+        ce n'est PAS une erreur 404.**
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Dernière mesure (peut être null)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                found:
+                  summary: "Mesure trouvée"
+                  value:
+                    success: true
+                    message: "Dernière entrée de fréquence cardiaque"
+                    data:
+                      entry:
+                        _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        bpm: 72
+                        category: "normal"
+                        context: "resting"
+                        recordedAt: "2025-06-15T08:00:00.000Z"
+                        createdAt: "2025-06-15T08:00:00.000Z"
+                        updatedAt: "2025-06-15T08:00:00.000Z"
+                notFound:
+                  summary: "Aucune mesure (null)"
+                  value:
+                    success: true
+                    message: "Dernière entrée de fréquence cardiaque"
+                    data:
+                      entry: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /heart-rate/averages:
+    get:
+      tags: [HeartRate]
+      summary: "Moyennes de fréquence cardiaque sur une période"
+      description: >
+        Calcule la moyenne du BPM sur une période donnée via agrégation
+        MongoDB. Le paramètre optionnel `context` permet de filtrer les
+        mesures par contexte (`resting`, `after_exercise`, `other`).
+
+        **IMPORTANT — Filtrage par contexte :**
+        Sans filtre `context`, les mesures de différents contextes
+        (repos, post-exercice, autre) sont mélangées dans la moyenne,
+        ce qui peut donner un résultat peu représentatif. Le frontend
+        **doit** filtrer explicitement par `context` pour obtenir des
+        moyennes cohérentes (ex: moyenne au repos uniquement).
+
+        Si aucune donnée n'existe sur la période, `entriesCount` est 0
+        et `averageBpm` est à 0 (pas de NaN). Paramètres : `days`
+        (défaut: 7, max: 365), `context` (optionnel).
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: days
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 365
+            default: 7
+          description: "Nombre de jours (1-365, entier positif)"
+        - in: query
+          name: context
+          required: false
+          schema:
+            type: string
+            enum: [resting, after_exercise, other]
+          description: "Filtrer par contexte (optionnel). Sans filtre, tous les contextes sont mélangés."
+      responses:
+        "200":
+          description: "Moyennes de fréquence cardiaque"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                withData:
+                  summary: "Données trouvées sur la période"
+                  value:
+                    success: true
+                    message: "Moyennes de fréquence cardiaque"
+                    data:
+                      averages:
+                        averageBpm: 68.5
+                        entriesCount: 25
+                        message: "Moyenne calculée sur 25 mesures (7 derniers jours)"
+                noData:
+                  summary: "Aucune donnée sur la période"
+                  value:
+                    success: true
+                    message: "Moyennes de fréquence cardiaque"
+                    data:
+                      averages:
+                        averageBpm: 0
+                        entriesCount: 0
+                        message: "Aucune donnée de fréquence cardiaque enregistrée sur cette période"
+        "400":
+          description: "Paramètre days invalide (non entier, < 1, > 365)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /heart-rate/{id}:
+    delete:
+      tags: [HeartRate]
+      summary: "Supprimer une mesure de fréquence cardiaque"
+      description: >
+        Supprime une entrée de fréquence cardiaque. Le middleware
+        `validateObjectId` vérifie que l'ID est un ObjectId MongoDB
+        valide (sinon 400). La suppression est protégée contre les
+        attaques IDOR : le service vérifie que l'entrée appartient
+        bien à l'utilisateur connecté (sinon 403). Si l'ObjectId est
+        valide mais l'entrée introuvable, une erreur 404 est retournée.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId MongoDB de l'entrée de fréquence cardiaque"
+      responses:
+        "200":
+          description: "Entrée supprimée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Entrée de fréquence cardiaque supprimée"
+        "400":
+          description: "ID malformé (ObjectId invalide)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "ID d'entrée de fréquence cardiaque invalide"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Tentative de suppression d'une entrée ne vous appartenant pas (IDOR)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Vous ne pouvez pas supprimer une entrée qui ne vous appartient pas"
+        "404":
+          description: "Entrée introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Entrée de fréquence cardiaque introuvable"
+
+  /body-fat:
+    post:
+      tags: [BodyFat]
+      summary: "Enregistrer une mesure de graisse corporelle"
+      description: >
+        Calcule et enregistre le pourcentage de graisse corporelle à
+        partir des mesures anthropométriques via la méthode US Navy.
+
+        **Formule utilisée :**
+        Méthode **US Navy** (Hodgdon & Beckett, 1984, Naval Health
+        Research Center). Les mesures sont saisies en centimètres mais
+        converties en pouces en interne (÷ 2.54) pour appliquer la
+        formule originale :
+
+        - **Homme** : BF% = 86.010 × log10(waist - neck)
+          - 70.041 × log10(height) + 36.76
+        - **Femme** : BF% = 163.205 × log10(waist + hip - neck)
+          - 97.684 × log10(height) - 78.387
+
+        **Champs requis :**
+        - `neckCm` : tour de cou (20-60 cm)
+        - `waistCm` : tour de taille (40-200 cm). Doit être strictement
+          supérieur à `neckCm` (sinon log10 invalide → 400)
+        - `heightCm` : taille (50-250 cm)
+
+        **Champ conditionnel — hipCm :**
+        - `hipCm` (40-200 cm) est optionnel au niveau du schéma de
+          validation mais devient **obligatoire au niveau service**
+          si l'utilisateur est `gender: female`. Une requête POST
+          sans `hipCm` pour une femme retourne 400 : "La mesure des
+          hanches est requise pour ce calcul."
+        - Pour un **homme**, si `hipCm` est tout de même fourni, il
+          est simplement **ignoré** dans le calcul (pas d'erreur).
+
+        **Résultat :**
+        - `bodyFatPercent` : pourcentage calculé (arrondi à 1 décimale)
+        - `category` : catégorie déterminée par `getBodyFatCategory`
+          (essentiel, athletique, fitness, moyen, au_dessus_de_la_moyenne)
+
+        **Note :** Pas de route `/averages` pour ce module — moyenner
+        un pourcentage de graisse corporelle sur plusieurs mesures
+        manuelles a moins de pertinence statistique.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBodyFatEntryInput"
+            examples:
+              male:
+                summary: "Homme (sans hipCm)"
+                value:
+                  neckCm: 38
+                  waistCm: 85
+                  heightCm: 175
+              female:
+                summary: "Femme (avec hipCm obligatoire)"
+                value:
+                  neckCm: 33
+                  waistCm: 72
+                  hipCm: 95
+                  heightCm: 165
+      responses:
+        "201":
+          description: "Mesure de graisse corporelle enregistrée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Mesure de graisse corporelle enregistrée"
+                data:
+                  entry:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    neckCm: 38
+                    waistCm: 85
+                    hipCm: null
+                    heightCm: 175
+                    bodyFatPercent: 18.5
+                    category: "fitness"
+                    recordedAt: "2025-06-15T08:00:00.000Z"
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Données invalides ou incohérentes"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                waistLessThanNeck:
+                  summary: "Tour de taille inférieur au tour de cou"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "custom"
+                        path: ["waistCm"]
+                        message: "Le tour de taille doit être supérieur au tour de cou pour effectuer le calcul de la graisse corporelle."
+                missingHipForFemale:
+                  summary: "Hanche manquante pour une femme"
+                  value:
+                    success: false
+                    message: "La mesure des hanches est requise pour ce calcul."
+                missingGender:
+                  summary: "Genre non défini sur le profil"
+                  value:
+                    success: false
+                    message: "Genre manquant dans votre profil. Veuillez renseigner votre genre."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /body-fat/history:
+    get:
+      tags: [BodyFat]
+      summary: "Historique des mesures de graisse corporelle"
+      description: >
+        Retourne la liste des mesures de graisse corporelle, triées par
+        `recordedAt` décroissant. Les paramètres `from` et `to`
+        filtrent par plage de dates. `from` doit précéder `to` si les
+        deux sont fournis. Le paramètre `limit` contrôle le nombre de
+        résultats (défaut 50, max 200).
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: "Nombre d'entrées (doit être un entier positif)"
+        - in: query
+          name: from
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Borne inférieure (incluse) sur recordedAt"
+        - in: query
+          name: to
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Borne supérieure (incluse) sur recordedAt"
+      responses:
+        "200":
+          description: "Historique récupéré"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Historique récupéré"
+                data:
+                  entries:
+                    - _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                      userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                      neckCm: 38
+                      waistCm: 85
+                      hipCm: null
+                      heightCm: 175
+                      bodyFatPercent: 18.5
+                      category: "fitness"
+                      recordedAt: "2025-06-15T08:00:00.000Z"
+                      createdAt: "2025-06-15T08:00:00.000Z"
+                      updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Paramètre invalide (limit non entier, from > to, dates invalides)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /body-fat/latest:
+    get:
+      tags: [BodyFat]
+      summary: "Dernière mesure de graisse corporelle"
+      description: >
+        Retourne la mesure de graisse corporelle la plus récente (triée
+        par `recordedAt` décroissant). **La réponse peut être
+        `{ data: { entry: null } }` si aucune mesure n'existe —
+        ce n'est PAS une erreur 404.**
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Dernière mesure (peut être null)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                found:
+                  summary: "Mesure trouvée"
+                  value:
+                    success: true
+                    message: "Dernière mesure de graisse corporelle"
+                    data:
+                      entry:
+                        _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        neckCm: 38
+                        waistCm: 85
+                        hipCm: null
+                        heightCm: 175
+                        bodyFatPercent: 18.5
+                        category: "fitness"
+                        recordedAt: "2025-06-15T08:00:00.000Z"
+                        createdAt: "2025-06-15T08:00:00.000Z"
+                        updatedAt: "2025-06-15T08:00:00.000Z"
+                notFound:
+                  summary: "Aucune mesure (null)"
+                  value:
+                    success: true
+                    message: "Dernière mesure de graisse corporelle"
+                    data:
+                      entry: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /body-fat/{id}:
+    delete:
+      tags: [BodyFat]
+      summary: "Supprimer une mesure de graisse corporelle"
+      description: >
+        Supprime une entrée de graisse corporelle. Le middleware
+        `validateObjectId` vérifie que l'ID est un ObjectId MongoDB
+        valide (sinon 400). La suppression est protégée contre les
+        attaques IDOR : le service vérifie que l'entrée appartient
+        bien à l'utilisateur connecté (sinon 403). Si l'ObjectId est
+        valide mais l'entrée introuvable, une erreur 404 est retournée.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId MongoDB de l'entrée de graisse corporelle"
+      responses:
+        "200":
+          description: "Entrée supprimée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Mesure de graisse corporelle supprimée"
+        "400":
+          description: "ID malformé (ObjectId invalide)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "ID d'entrée de graisse corporelle invalide"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Tentative de suppression d'une entrée ne vous appartenant pas (IDOR)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Vous ne pouvez pas supprimer une entrée qui ne vous appartient pas"
+        "404":
+          description: "Entrée introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Entrée de graisse corporelle introuvable"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -2850,6 +3570,249 @@ components:
               type: string
               description: "Message médicalement prudent (langage de suggestion, pas de diagnostic)"
               example: "Vos valeurs suggèrent une hypertension de stade 1. Nous vous recommandons d'en parler à un professionnel de santé."
+
+    HeartRateZones:
+      type: object
+      description: "Zones de fréquence cardiaque calculées (contenu dans data.result)"
+      properties:
+        maxHeartRate:
+          type: integer
+          description: "FCM selon la formule principale (Gulati pour femme, Fox pour homme)"
+          example: 185
+        formula:
+          type: string
+          enum: [Gulati, Fox]
+          description: "Formule utilisée pour le calcul principal"
+          example: "Fox"
+        alternative:
+          type: object
+          description: "Formule alternative Tanaka (toujours incluse, présentée de façon neutre)"
+          properties:
+            maxHeartRate:
+              type: integer
+              example: 173
+            formula:
+              type: string
+              enum: [Tanaka]
+              example: "Tanaka"
+        zones:
+          type: object
+          description: "5 zones d'effort basées sur la formule principale"
+          properties:
+            zone1_warmup:
+              $ref: "#/components/schemas/HeartRateZone"
+            zone2_fatBurn:
+              $ref: "#/components/schemas/HeartRateZone"
+            zone3_cardio:
+              $ref: "#/components/schemas/HeartRateZone"
+            zone4_hardcore:
+              $ref: "#/components/schemas/HeartRateZone"
+            zone5_peak:
+              $ref: "#/components/schemas/HeartRateZone"
+        alternativeZones:
+          type: object
+          description: "5 zones d'effort basées sur la formule alternative Tanaka"
+          properties:
+            zone1_warmup:
+              $ref: "#/components/schemas/HeartRateZone"
+            zone2_fatBurn:
+              $ref: "#/components/schemas/HeartRateZone"
+            zone3_cardio:
+              $ref: "#/components/schemas/HeartRateZone"
+            zone4_hardcore:
+              $ref: "#/components/schemas/HeartRateZone"
+            zone5_peak:
+              $ref: "#/components/schemas/HeartRateZone"
+        age:
+          type: integer
+          example: 35
+        gender:
+          type: string
+          enum: [male, female]
+          example: "male"
+        ageSource:
+          type: string
+          enum: [override, profile]
+          description: "Source de l'âge utilisé pour le calcul"
+          example: "profile"
+
+    HeartRateZone:
+      type: object
+      description: "Une zone d'effort cardiaque"
+      properties:
+        min:
+          type: integer
+          description: "BPM minimum de la zone"
+          example: 130
+        max:
+          type: integer
+          description: "BPM maximum de la zone"
+          example: 148
+        label:
+          type: string
+          description: "Libellé de la zone en français"
+          example: "Cardio"
+
+    HeartRateEntry:
+      type: object
+      description: "Entrée de fréquence cardiaque"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        userId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0f"
+        bpm:
+          type: integer
+          description: "Battements par minute"
+          example: 72
+        category:
+          type: string
+          enum: [bradycardie, normal, tachycardie, post_exercise_elevation]
+          description: "Catégorie déterminée par getPulseCategory (peut être post_exercise_elevation si context=after_exercise et bpm > 100)"
+          example: "normal"
+        context:
+          type: string
+          enum: [resting, after_exercise, other]
+          description: "Contexte de la mesure"
+          example: "resting"
+        recordedAt:
+          type: string
+          format: date-time
+          example: "2025-06-15T08:00:00.000Z"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateHeartRateEntryInput:
+      type: object
+      description: "Payload pour créer une mesure de fréquence cardiaque"
+      required: [bpm]
+      properties:
+        bpm:
+          type: integer
+          minimum: 30
+          maximum: 220
+          description: "Battements par minute (nombre entier)"
+          example: 72
+        context:
+          type: string
+          enum: [resting, after_exercise, other]
+          default: resting
+          description: "Contexte de la mesure (défaut: resting)"
+          example: "resting"
+        recordedAt:
+          type: string
+          format: date-time
+          description: "Date de la mesure (optionnelle, défaut: Date.now). Ne peut pas être dans le futur."
+          example: "2025-06-15T08:00:00.000Z"
+
+    HeartRateAverages:
+      type: object
+      description: "Moyennes de fréquence cardiaque sur une période (contenu dans data.averages)"
+      properties:
+        averageBpm:
+          type: number
+          description: "Moyenne du BPM (arrondie à 1 décimale). 0 si aucune donnée."
+          example: 68.5
+        entriesCount:
+          type: integer
+          description: "Nombre d'entrées sur la période. 0 si aucune donnée (pas de NaN)."
+          example: 25
+        message:
+          type: string
+          description: "Message indiquant le nombre de mesures analysées ou l'absence de données"
+          example: "Moyenne calculée sur 25 mesures (7 derniers jours)"
+
+    BodyFatEntry:
+      type: object
+      description: "Entrée de mesure de graisse corporelle (méthode US Navy)"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        userId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0f"
+        neckCm:
+          type: number
+          description: "Tour de cou en cm"
+          example: 38
+        waistCm:
+          type: number
+          description: "Tour de taille en cm"
+          example: 85
+        hipCm:
+          type: number
+          nullable: true
+          description: "Tour de hanches en cm (null si homme, obligatoire si femme)"
+          example: null
+        heightCm:
+          type: number
+          description: "Taille en cm"
+          example: 175
+        bodyFatPercent:
+          type: number
+          description: "Pourcentage de graisse corporelle calculé (arrondi à 1 décimale)"
+          example: 18.5
+        category:
+          type: string
+          enum: [essentiel, athletique, fitness, moyen, au_dessus_de_la_moyenne]
+          description: "Catégorie déterminée par getBodyFatCategory"
+          example: "fitness"
+        recordedAt:
+          type: string
+          format: date-time
+          example: "2025-06-15T08:00:00.000Z"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateBodyFatEntryInput:
+      type: object
+      description: "Payload pour créer une mesure de graisse corporelle"
+      required: [neckCm, waistCm, heightCm]
+      properties:
+        neckCm:
+          type: number
+          minimum: 20
+          maximum: 60
+          description: "Tour de cou en cm"
+          example: 38
+        waistCm:
+          type: number
+          minimum: 40
+          maximum: 200
+          description: "Tour de taille en cm. Doit être strictement supérieur à neckCm."
+          example: 85
+        hipCm:
+          type: number
+          minimum: 40
+          maximum: 200
+          description: "Tour de hanches en cm. Optionnel au niveau validation mais obligatoire si gender: female (vérifié au niveau service). Ignoré si gender: male."
+          example: 95
+        heightCm:
+          type: number
+          minimum: 50
+          maximum: 250
+          description: "Taille en cm"
+          example: 175
+        recordedAt:
+          type: string
+          format: date-time
+          description: "Date de la mesure (optionnelle, défaut: Date.now). Ne peut pas être dans le futur."
+          example: "2025-06-15T08:00:00.000Z"
 
   responses:
     Unauthorized:
