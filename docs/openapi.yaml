@@ -1,0 +1,996 @@
+openapi: "3.0.3"
+info:
+  title: "HealthApp API"
+  version: "1.0.0"
+  description: "API de l'application de suivi santé"
+servers:
+  - url: "http://localhost:5000/api"
+    description: "Développement local"
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: "Créer un compte"
+      description: >
+        Inscription avec email/password. Les tokens sont posés en cookies
+        httpOnly (accessToken + refreshToken). L'utilisateur est créé avec
+        authProvider: "local".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, firstName, lastName, gender, dateOfBirth]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
+                password:
+                  type: string
+                  minLength: 8
+                  description: "Minimum 8 caractères, une majuscule, un chiffre"
+                  example: "Password1"
+                firstName:
+                  type: string
+                  minLength: 2
+                  example: "Jean"
+                lastName:
+                  type: string
+                  minLength: 2
+                  example: "Dupont"
+                gender:
+                  type: string
+                  enum: [male, female]
+                  example: "male"
+                dateOfBirth:
+                  type: string
+                  format: date
+                  description: "AAAA-MM-JJ. L'utilisateur doit avoir au moins 13 ans."
+                  example: "1990-05-15"
+      responses:
+        "201":
+          description: "Compte créé avec succès"
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: "Cookies httpOnly accessToken et refreshToken posés"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Compte créé avec succès"
+                data:
+                  user:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    email: "user@example.com"
+                    firstName: "Jean"
+                    lastName: "Dupont"
+                    gender: "male"
+                    dateOfBirth: "1990-05-15T00:00:00.000Z"
+                    authProvider: "local"
+                    tokenVersion: 0
+                    timezone: "UTC"
+                    isEmailVerified: false
+                    createdAt: "2025-01-15T10:00:00.000Z"
+                    updatedAt: "2025-01-15T10:00:00.000Z"
+        "400":
+          description: "Données invalides (validation Zod)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Validation échouée"
+                details:
+                  - field: "password"
+                    message: "Le mot de passe doit contenir au moins une majuscule"
+        "409":
+          description: "Email déjà utilisé"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Un compte avec cet email existe déjà"
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: "Connexion"
+      description: >
+        Authentification par email/password. Les tokens sont posés en cookies
+        httpOnly (accessToken + refreshToken).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
+                password:
+                  type: string
+                  minLength: 1
+                  description: "Mot de passe (non validé en format côté back pour le login)"
+                  example: "Password1"
+      responses:
+        "200":
+          description: "Connexion réussie"
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: "Cookies httpOnly accessToken et refreshToken posés"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Connexion réussie"
+                data:
+                  user:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    email: "user@example.com"
+                    firstName: "Jean"
+                    lastName: "Dupont"
+                    gender: "male"
+                    dateOfBirth: "1990-05-15T00:00:00.000Z"
+                    authProvider: "local"
+                    tokenVersion: 1
+                    timezone: "UTC"
+                    isEmailVerified: false
+                    createdAt: "2025-01-15T10:00:00.000Z"
+                    updatedAt: "2025-01-15T12:00:00.000Z"
+        "400":
+          description: "Données invalides (validation Zod)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Email ou mot de passe incorrect"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Email ou mot de passe incorrect"
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: "Rafraîchir les tokens"
+      description: >
+        Génère un nouveau jeu de tokens à partir du refreshToken présent dans
+        les cookies. L'ancien refreshToken est révoqué (remplacement par
+        rotation). Aucun body requis.
+      responses:
+        "200":
+          description: "Token rafraîchi avec succès"
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: "Nouveaux cookies httpOnly accessToken et refreshToken"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Token rafraîchi avec succès"
+        "401":
+          description: "Refresh token manquant ou invalide"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing:
+                  summary: "Refresh token manquant"
+                  value:
+                    success: false
+                    message: "Refresh token manquant"
+                invalid:
+                  summary: "Refresh token invalide ou expiré"
+                  value:
+                    success: false
+                    message: "Refresh token invalide"
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: "Déconnexion"
+      description: >
+        Révoque le refreshToken présent dans les cookies et efface les cookies
+        d'authentification. Aucun body requis. Le cookie accessToken n'est pas
+        vérifié côté serveur (route non protégée par authMiddleware).
+      responses:
+        "200":
+          description: "Déconnexion réussie"
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: "Cookies accessToken et refreshToken effacés"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Déconnexion réussie"
+        "401":
+          description: "Refresh token manquant"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Refresh token manquant"
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: "Profil utilisateur connecté"
+      description: >
+        Retourne les informations de l'utilisateur authentifié via le cookie
+        accessToken.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Profil récupéré"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Profil récupéré"
+                data:
+                  user:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    email: "user@example.com"
+                    firstName: "Jean"
+                    lastName: "Dupont"
+                    gender: "male"
+                    dateOfBirth: "1990-05-15T00:00:00.000Z"
+                    authProvider: "local"
+                    tokenVersion: 2
+                    timezone: "Europe/Paris"
+                    isEmailVerified: false
+                    createdAt: "2025-01-15T10:00:00.000Z"
+                    updatedAt: "2025-01-15T14:00:00.000Z"
+        "401":
+          description: "Non authentifié ou session invalide"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                noToken:
+                  summary: "Token manquant"
+                  value:
+                    success: false
+                    message: "Authentification requise"
+                expired:
+                  summary: "Token expiré ou tokenVersion mismatch"
+                  value:
+                    success: false
+                    message: "Session expirée ou invalide"
+                notFound:
+                  summary: "Utilisateur supprimé entre-temps"
+                  value:
+                    success: false
+                    message: "Utilisateur introuvable"
+
+  /auth/me/timezone:
+    patch:
+      tags: [Auth]
+      summary: "Mettre à jour le fuseau horaire"
+      description: >
+        Met à jour le fuseau horaire (IANA timezone) de l'utilisateur
+        connecté.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [timezone]
+              properties:
+                timezone:
+                  type: string
+                  description: "Identifiant IANA valide (ex: Europe/Paris, America/New_York)"
+                  example: "Europe/Paris"
+      responses:
+        "200":
+          description: "Fuseau horaire mis à jour"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Fuseau horaire mis à jour"
+                data:
+                  user:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    email: "user@example.com"
+                    firstName: "Jean"
+                    lastName: "Dupont"
+                    gender: "male"
+                    dateOfBirth: "1990-05-15T00:00:00.000Z"
+                    authProvider: "local"
+                    tokenVersion: 2
+                    timezone: "Europe/Paris"
+                    isEmailVerified: false
+                    createdAt: "2025-01-15T10:00:00.000Z"
+                    updatedAt: "2025-01-15T14:30:00.000Z"
+        "400":
+          description: "Fuseau horaire invalide"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Validation échouée"
+                details:
+                  - field: "timezone"
+                    message: "Invalid IANA timezone identifier"
+        "401":
+          description: "Non authentifié"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/google:
+    get:
+      tags: [Auth]
+      summary: "Connexion Google OAuth"
+      description: >
+        Redirige vers Google OAuth 2.0 pour authentification. Un cookie
+        `oauth_state` (httpOnly) est posé pour prévenir les attaques CSRF.
+        Le scope demandé est ["profile", "email"].
+      responses:
+        "302":
+          description: "Redirection vers Google OAuth"
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: "Cookie oauth_state posé (httpOnly, sameSite: lax, 10 min)"
+
+  /auth/google/callback:
+    get:
+      tags: [Auth]
+      summary: "Callback Google OAuth"
+      description: >
+        Endpoint de callback appelé par Google après authentification.
+        Valide le paramètre `state` contre le cookie `oauth_state`, puis
+        authentifie via Passport. En cas de succès, les tokens sont posés
+        en cookies httpOnly et l'utilisateur est redirigé vers
+        CLIENT_URL/auth/callback (avec ?onboarding=true si l'utilisateur
+        n'a pas encore rempli genre et dateNaissance).
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+          description: "Code d'autorisation fourni par Google"
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+          description: "État CSRF (doit correspondre au cookie oauth_state)"
+      responses:
+        "302":
+          description: "Redirection vers le frontend"
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: "Cookies accessToken et refreshToken posés ; cookie oauth_state effacé"
+          content:
+            text/html:
+              schema:
+                type: string
+              example: "Redirecting..."
+        "302_google_error":
+          description: "Redirection vers CLIENT_URL/login?error=... en cas d'échec"
+
+  /health-profile:
+    get:
+      tags: [HealthProfile]
+      summary: "Récupérer mon profil santé"
+      description: >
+        Retourne le profil santé complet de l'utilisateur connecté. Si aucun
+        profil n'existe encore, un document vide est créé automatiquement
+        (onboardingStep: 0, isCompleted: false). Ce endpoint est le point
+        d'entrée du wizard multi-étapes à sauvegarde progressive.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Profil santé récupéré"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Profil récupéré"
+                data:
+                  profile:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    height: 175
+                    currentWeight: 75
+                    activityLevel: "moderate"
+                    goal: "maintain"
+                    medicalHistory:
+                      hypertension: false
+                      diabetes: false
+                      allergies: ["pollen"]
+                      currentMedications: []
+                    lifestyle:
+                      averageSleepHours: 7
+                      smoker: false
+                      alcoholConsumption: "occasional"
+                    womenSpecific: null
+                    onboardingStep: 4
+                    isCompleted: true
+                    completedAt: "2025-06-15T10:00:00.000Z"
+                    createdAt: "2025-06-10T08:00:00.000Z"
+                    updatedAt: "2025-06-15T10:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /health-profile/status:
+    get:
+      tags: [HealthProfile]
+      summary: "Statut de l'onboarding"
+      description: >
+        Retourne l'état d'avancement du wizard onboarding : terminé ou non,
+        l'étape courante et le nombre total d'étapes. Le total dépend du
+        genre de l'utilisateur (4 pour un homme, 5 pour une femme).
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Statut de l'onboarding"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Statut de l'onboarding"
+                data:
+                  isCompleted: false
+                  currentStep: 2
+                  totalSteps: 5
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /health-profile/step/{step}:
+    post:
+      tags: [HealthProfile]
+      summary: "Soumettre une étape du wizard onboarding"
+      description: >
+        Sauvegarde les données d'une étape du wizard onboarding. Le schéma
+        de validation est déterminé à la fois par le numéro d'étape ET par
+        le genre de l'utilisateur (stocké en base). Les étapes doivent être
+        complétées dans l'ordre (onboardingStep + 1 maximum).
+
+        **Schémas par étape :**
+
+        - **Étape 1 — Mesures de base** :
+          `height` (cm, 50-250), `currentWeight` (kg, 20-300)
+
+        - **Étape 2 — Activité et objectif** :
+          `activityLevel` (`sedentary` | `light` | `moderate` | `active` | `very_active`),
+          `goal` (`lose_weight` | `gain_weight` | `maintain` | `general_health`)
+
+        - **Étape 3 — Antécédents médicaux** :
+          `medicalHistory` avec `hypertension` (bool), `diabetes` (bool),
+          `allergies` (string[]), `currentMedications` (string[])
+
+        - **Étape 4 — Style de vie** :
+          `lifestyle` avec `averageSleepHours` (0-24), `smoker` (bool),
+          `alcoholConsumption` (`none` | `occasional` | `regular`)
+
+        - **Étape 5 — Spécifique femme** (uniquement si `gender: "female"`) :
+          `womenSpecific` avec `cycleRegularity` (`regular` | `irregular`),
+          `lastPeriodDate` (date string, ne peut pas être dans le futur),
+          `averageCycleLength` (jours, 15-45)
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: step
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 5
+          description: "Numéro de l'étape (1-5)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/Step1Input"
+                - $ref: "#/components/schemas/Step2Input"
+                - $ref: "#/components/schemas/Step3Input"
+                - $ref: "#/components/schemas/Step4Input"
+                - $ref: "#/components/schemas/Step5WomenInput"
+            examples:
+              step1:
+                summary: "Étape 1 — Mesures de base"
+                value:
+                  height: 175
+                  currentWeight: 75
+              step2:
+                summary: "Étape 2 — Activité et objectif"
+                value:
+                  activityLevel: "moderate"
+                  goal: "maintain"
+              step3:
+                summary: "Étape 3 — Antécédents médicaux"
+                value:
+                  medicalHistory:
+                    hypertension: false
+                    diabetes: false
+                    allergies: ["pollen"]
+                    currentMedications: ["Vitamine D"]
+              step4:
+                summary: "Étape 4 — Style de vie"
+                value:
+                  lifestyle:
+                    averageSleepHours: 7
+                    smoker: false
+                    alcoholConsumption: "occasional"
+              step5:
+                summary: "Étape 5 — Spécifique femme"
+                value:
+                  womenSpecific:
+                    cycleRegularity: "regular"
+                    lastPeriodDate: "2025-06-15"
+                    averageCycleLength: 28
+      responses:
+        "200":
+          description: "Étape enregistrée avec succès"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Étape enregistrée"
+                data:
+                  profile:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    height: 175
+                    currentWeight: 75
+                    onboardingStep: 1
+                    isCompleted: false
+        "400":
+          description: "Erreur de validation propre au wizard health-profile"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidStep:
+                  summary: "Numéro d'étape invalide"
+                  value:
+                    success: false
+                    message: "Étape invalide"
+                step5ForMale:
+                  summary: "Étape femme soumise par un compte homme"
+                  value:
+                    success: false
+                    message: "Cette étape ne concerne pas votre profil"
+                stepOrder:
+                  summary: "Étape soumise dans le désordre"
+                  value:
+                    success: false
+                    message: "Vous ne pouvez pas sauter d'étape. Veuillez compléter les étapes dans l'ordre."
+                missingGender:
+                  summary: "Genre non défini sur le compte"
+                  value:
+                    success: false
+                    message: "Veuillez d'abord compléter votre profil (genre requis)"
+                validationFailed:
+                  summary: "Données invalides pour le schéma de l'étape"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "too_small"
+                        path: ["height"]
+                        message: "La taille doit être comprise entre 50 et 250 cm"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: "Utilisateur ou profil introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Utilisateur introuvable"
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: accessToken
+      description: "Cookie httpOnly `accessToken` émis lors de la connexion (POST /api/auth/login)"
+
+  schemas:
+    User:
+      type: object
+      description: "Utilisateur (champ password et refreshTokens exclus du JSON)"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        firstName:
+          type: string
+          example: "Jean"
+        lastName:
+          type: string
+          example: "Dupont"
+        gender:
+          type: string
+          enum: [male, female]
+          nullable: true
+          example: "male"
+        dateOfBirth:
+          type: string
+          format: date-time
+          nullable: true
+          example: "1990-05-15T00:00:00.000Z"
+        authProvider:
+          type: string
+          enum: [local, google]
+          example: "local"
+        googleId:
+          type: string
+          nullable: true
+          example: "1234567890"
+        tokenVersion:
+          type: integer
+          default: 0
+          example: 2
+        timezone:
+          type: string
+          default: "UTC"
+          example: "Europe/Paris"
+        isEmailVerified:
+          type: boolean
+          default: false
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+          example: true
+        message:
+          type: string
+          example: "Opération réussie"
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+          example: false
+        message:
+          type: string
+          example: "Une erreur est survenue"
+        details:
+          type: array
+          description: "Détails additionnels (présent uniquement sur les erreurs de validation)"
+          items:
+            type: object
+
+    HealthProfile:
+      type: object
+      description: "Profil santé complet de l'utilisateur (wizard onboarding multi-étapes)"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        userId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0f"
+        height:
+          type: number
+          nullable: true
+          description: "Taille en cm (étape 1)"
+          example: 175
+        currentWeight:
+          type: number
+          nullable: true
+          description: "Poids actuel en kg (étape 1)"
+          example: 75
+        activityLevel:
+          type: string
+          nullable: true
+          enum: [sedentary, light, moderate, active, very_active]
+          description: "Niveau d'activité (étape 2)"
+          example: "moderate"
+        goal:
+          type: string
+          nullable: true
+          enum: [lose_weight, gain_weight, maintain, general_health]
+          description: "Objectif santé (étape 2)"
+          example: "maintain"
+        medicalHistory:
+          type: object
+          description: "Antécédents médicaux (étape 3)"
+          properties:
+            hypertension:
+              type: boolean
+              default: false
+            diabetes:
+              type: boolean
+              default: false
+            allergies:
+              type: array
+              items:
+                type: string
+              default: []
+            currentMedications:
+              type: array
+              items:
+                type: string
+              default: []
+        lifestyle:
+          type: object
+          nullable: true
+          description: "Style de vie (étape 4)"
+          properties:
+            averageSleepHours:
+              type: number
+              example: 7
+            smoker:
+              type: boolean
+              example: false
+            alcoholConsumption:
+              type: string
+              enum: [none, occasional, regular]
+              example: "occasional"
+        womenSpecific:
+          type: object
+          nullable: true
+          description: "Informations spécifiques aux femmes (étape 5, uniquement si gender: female)"
+          properties:
+            cycleRegularity:
+              type: string
+              enum: [regular, irregular]
+              example: "regular"
+            lastPeriodDate:
+              type: string
+              format: date-time
+              nullable: true
+              example: "2025-06-15T00:00:00.000Z"
+            averageCycleLength:
+              type: number
+              example: 28
+        onboardingStep:
+          type: integer
+          description: "Étape actuelle du wizard (0 = pas commencé)"
+          default: 0
+          example: 4
+        isCompleted:
+          type: boolean
+          description: "Toutes les étapes obligatoires (1-4) sont-elles complétées ?"
+          default: false
+          example: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Date à laquelle le profil a été marqué comme complété"
+          example: "2025-06-15T10:00:00.000Z"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OnboardingStatus:
+      type: object
+      description: "Statut d'avancement du wizard onboarding"
+      properties:
+        isCompleted:
+          type: boolean
+          example: false
+        currentStep:
+          type: integer
+          description: "Dernière étape complétée (0 = aucune)"
+          example: 2
+        totalSteps:
+          type: integer
+          description: "Nombre total d'étapes (4 pour un homme, 5 pour une femme)"
+          example: 5
+
+    Step1Input:
+      type: object
+      description: "Étape 1 — Mesures de base (taille et poids)"
+      required: [height, currentWeight]
+      properties:
+        height:
+          type: number
+          minimum: 50
+          maximum: 250
+          description: "Taille en cm"
+          example: 175
+        currentWeight:
+          type: number
+          minimum: 20
+          maximum: 300
+          description: "Poids en kg"
+          example: 75
+
+    Step2Input:
+      type: object
+      description: "Étape 2 — Activité physique et objectif"
+      required: [activityLevel, goal]
+      properties:
+        activityLevel:
+          type: string
+          enum: [sedentary, light, moderate, active, very_active]
+          description: "Niveau d'activité quotidienne"
+          example: "moderate"
+        goal:
+          type: string
+          enum: [lose_weight, gain_weight, maintain, general_health]
+          description: "Objectif principal"
+          example: "maintain"
+
+    Step3Input:
+      type: object
+      description: "Étape 3 — Antécédents médicaux"
+      required: [medicalHistory]
+      properties:
+        medicalHistory:
+          type: object
+          required: [hypertension, diabetes, allergies, currentMedications]
+          properties:
+            hypertension:
+              type: boolean
+              example: false
+            diabetes:
+              type: boolean
+              example: false
+            allergies:
+              type: array
+              items:
+                type: string
+              maxItems: 20
+              example: ["pollen"]
+            currentMedications:
+              type: array
+              items:
+                type: string
+              maxItems: 20
+              example: ["Vitamine D"]
+
+    Step4Input:
+      type: object
+      description: "Étape 4 — Style de vie"
+      required: [lifestyle]
+      properties:
+        lifestyle:
+          type: object
+          required: [averageSleepHours, smoker, alcoholConsumption]
+          properties:
+            averageSleepHours:
+              type: number
+              minimum: 0
+              maximum: 24
+              description: "Heures de sommeil moyennes par nuit"
+              example: 7
+            smoker:
+              type: boolean
+              example: false
+            alcoholConsumption:
+              type: string
+              enum: [none, occasional, regular]
+              example: "occasional"
+
+    Step5WomenInput:
+      type: object
+      description: "Étape 5 — Spécifique femme (uniquement si gender: female)"
+      required: [womenSpecific]
+      properties:
+        womenSpecific:
+          type: object
+          required: [cycleRegularity, lastPeriodDate, averageCycleLength]
+          properties:
+            cycleRegularity:
+              type: string
+              enum: [regular, irregular]
+              description: "Régularité du cycle menstruel"
+              example: "regular"
+            lastPeriodDate:
+              type: string
+              format: date
+              description: "Date des dernières règles (ne peut pas être dans le futur)"
+              example: "2025-06-15"
+            averageCycleLength:
+              type: number
+              minimum: 15
+              maximum: 45
+              description: "Durée moyenne du cycle en jours"
+              example: 28
+
+  responses:
+    Unauthorized:
+      description: "Non authentifié ou session invalide"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            noToken:
+              summary: "Token manquant"
+              value:
+                success: false
+                message: "Authentification requise"
+            expired:
+              summary: "Token expiré ou tokenVersion mismatch"
+              value:
+                success: false
+                message: "Session expirée ou invalide"
