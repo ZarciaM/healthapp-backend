@@ -4714,6 +4714,206 @@ paths:
                 success: false
                 message: "No hydration reminder found for this user"
 
+  ############################################################################
+  # DASHBOARD
+  ############################################################################
+
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      summary: "Tableau de bord agrégé"
+      description: >
+        Endpoint d'**agrégation** qui combine les dernières données
+        de tous les modules en un seul appel. Il réutilise uniquement
+        les services déjà existants (aucun calcul dupliqué), donc les
+        valeurs retournées ici sont garanties identiques aux appels
+        directs des endpoints individuels.
+
+        **Comportement de résilience :**
+        Chaque section peut indépendamment contenir soit des données,
+        soit `{ error: "message" }` si ce module spécifique échoue
+        (ex: onboarding incomplet pour calories/water). Jamais un
+        échec d'un module ne fait échouer toute la réponse — le
+        statusCode reste 200 même avec des sections en erreur.
+
+        **Structure de la réponse :**
+        - `user` — prénom, genre, âge calculé
+        - `onboardingCompleted` — booléen
+        - `bmi` — `{ latest: BmiEntry | null }`
+        - `weight` — `{ current, goal, progress }`
+        - `calories` — `{ recommended }` ou `{ error }`
+        - `water` — `{ recommended }` ou `{ error }`
+        - `sleep` — `{ latest, weeklyAverage }`
+        - `bloodPressure` — `{ latest, weeklyAverage }`
+        - `heartRate` — `{ latest }`
+        - `bodyFat` — `{ latest }`
+        - `medications` — `{ activeCount, upcomingToday }`
+          (`upcomingToday` filtre les rappels dont l'horaire est
+          encore à venir AUJOURD'HUI, dans le fuseau horaire de
+          l'utilisateur)
+        - `hydration` — `{ isConfigured, isActive }`
+        - `womenSpecific` — **`null` si l'utilisateur est
+          `gender: male`** (pas un objet vide, pas une erreur) ;
+          sinon objet avec `cycle` et `pregnancy`
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Tableau de bord agrégé"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Dashboard récupéré"
+                data:
+                  dashboard:
+                    user:
+                      firstName: "Marie"
+                      gender: "female"
+                      age: 28
+                    onboardingCompleted: true
+                    bmi:
+                      latest:
+                        _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        bmi: 22.5
+                        category: "Normal weight"
+                        weight: 65
+                        height: 170
+                        date: "2025-06-15T00:00:00.000Z"
+                        createdAt: "2025-06-15T08:00:00.000Z"
+                    weight:
+                      current:
+                        _id: "664a1b2c3d4e5f6a7b8c9d10"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        weight: 65
+                        date: "2025-06-15T00:00:00.000Z"
+                        createdAt: "2025-06-15T08:00:00.000Z"
+                      goal:
+                        _id: "664a1b2c3d4e5f6a7b8c9d20"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        targetWeight: 60
+                        startWeight: 70
+                        startDate: "2025-03-01T00:00:00.000Z"
+                        targetDate: "2025-09-01T00:00:00.000Z"
+                        isActive: true
+                      progress:
+                        currentWeight: 65
+                        startingWeight: 70
+                        weightChange: -5
+                        percentToGoal: 50
+                    calories:
+                      recommended:
+                        bmr: 1400
+                        tdee: 2100
+                        recommendedCalories: 1850
+                        message: "Apport recommandé pour une perte de poids modérée"
+                        sourceData:
+                          weight: 65
+                          height: 170
+                          age: 28
+                          gender: "female"
+                          activityLevel: "moderate"
+                          goal: "lose"
+                          weightSource: "latest_entry"
+                    water:
+                      recommended:
+                        totalMl: 2200
+                        breakdown:
+                          base: 1950
+                          activityBonus: 150
+                          climateBonus: 100
+                        message: "Apport hydrique recommandé"
+                        sourceData:
+                          weight: 65
+                          weightSource: "latest_entry"
+                          activityLevel: "moderate"
+                          climate: "temperate"
+                    sleep:
+                      latest:
+                        _id: "664a1b2c3d4e5f6a7b8c9d30"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        date: "2025-06-15"
+                        durationMinutes: 480
+                        quality: 4
+                        createdAt: "2025-06-15T08:00:00.000Z"
+                      weeklyAverage:
+                        averageDurationMinutes: 455
+                        averageQuality: 3.7
+                        entriesCount: 7
+                    bloodPressure:
+                      latest:
+                        _id: "664a1b2c3d4e5f6a7b8c9d40"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        systolic: 120
+                        diastolic: 80
+                        pulse: 72
+                        category: "Normale"
+                        date: "2025-06-15"
+                        createdAt: "2025-06-15T08:00:00.000Z"
+                      weeklyAverage:
+                        averageSystolic: 118
+                        averageDiastolic: 78
+                        averagePulse: 71
+                        entriesCount: 5
+                        overallCategory:
+                          category: "Normale"
+                          severity: ""
+                          message: "Votre tension artérielle se situe dans la plage normale selon les critères médicaux."
+                    heartRate:
+                      latest:
+                        _id: "664a1b2c3d4e5f6a7b8c9d50"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        bpm: 72
+                        date: "2025-06-15T00:00:00.000Z"
+                        createdAt: "2025-06-15T08:00:00.000Z"
+                        zone: "repos"
+                    bodyFat:
+                      latest:
+                        _id: "664a1b2c3d4e5f6a7b8c9d60"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        bodyFatPercentage: 24
+                        date: "2025-06-15T00:00:00.000Z"
+                        createdAt: "2025-06-15T08:00:00.000Z"
+                    medications:
+                      activeCount: 2
+                      upcomingToday:
+                        - _id: "664a1b2c3d4e5f6a7b8c9d70"
+                          userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                          medicationName: "Doliprane"
+                          dosage: "1000mg"
+                          times: ["20:00"]
+                          startDate: "2025-06-15T00:00:00.000Z"
+                          endDate: "2025-07-15T00:00:00.000Z"
+                          isActive: true
+                          notifyByEmail: true
+                          notifyByPush: true
+                          createdAt: "2025-06-15T08:00:00.000Z"
+                          updatedAt: "2025-06-15T08:00:00.000Z"
+                    hydration:
+                      isConfigured: true
+                      isActive: true
+                    womenSpecific:
+                      cycle:
+                        stats:
+                          averageLength: 28
+                          isRegular: true
+                          confidenceLevel: "high"
+                          cyclesAnalyzed: 6
+                        nextPrediction:
+                          estimatedDate: "2025-07-01T00:00:00.000Z"
+                          rangeStart: "2025-06-29T00:00:00.000Z"
+                          rangeEnd: "2025-07-04T00:00:00.000Z"
+                          confidenceLevel: "high"
+                          basedOnCyclesCount: 6
+                      pregnancy:
+                        current: null
+                        progress: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
 
   schemas:
@@ -6415,6 +6615,231 @@ components:
           type: boolean
           default: true
           example: true
+
+    DashboardResponse:
+      type: object
+      description: "Réponse agrégée du tableau de bord"
+      properties:
+        user:
+          type: object
+          description: "Informations de base de l'utilisateur"
+          properties:
+            firstName:
+              type: string
+              example: "Marie"
+            gender:
+              type: string
+              example: "female"
+            age:
+              type: integer
+              example: 28
+        onboardingCompleted:
+          type: boolean
+          example: true
+        bmi:
+          type: object
+          properties:
+            latest:
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/BmiEntry"
+        weight:
+          type: object
+          properties:
+            current:
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/WeightEntry"
+            goal:
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/WeightGoal"
+            progress:
+              type: object
+              nullable: true
+              properties:
+                currentWeight:
+                  type: number
+                  nullable: true
+                  example: 65
+                startingWeight:
+                  type: number
+                  nullable: true
+                  example: 70
+                weightChange:
+                  type: number
+                  nullable: true
+                  example: -5
+                percentToGoal:
+                  type: number
+                  nullable: true
+                  example: 50
+        calories:
+          type: object
+          description: "Apport calorique recommandé, ou { error } si onboarding incomplet"
+          properties:
+            recommended:
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/CaloriesCalculation"
+            error:
+              type: string
+              example: "Profil incomplet"
+        water:
+          type: object
+          description: "Apport hydrique recommandé, ou { error } si onboarding incomplet"
+          properties:
+            recommended:
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/WaterCalculation"
+            error:
+              type: string
+              example: "Profil incomplet"
+        sleep:
+          type: object
+          properties:
+            latest:
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/SleepEntry"
+            weeklyAverage:
+              type: object
+              properties:
+                averageDurationMinutes:
+                  type: number
+                  example: 455
+                averageQuality:
+                  type: number
+                  example: 3.7
+                entriesCount:
+                  type: integer
+                  example: 7
+        bloodPressure:
+          type: object
+          properties:
+            latest:
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/BloodPressureEntry"
+            weeklyAverage:
+              type: object
+              properties:
+                averageSystolic:
+                  type: number
+                  example: 118
+                averageDiastolic:
+                  type: number
+                  example: 78
+                averagePulse:
+                  type: number
+                  example: 71
+                entriesCount:
+                  type: integer
+                  example: 5
+                overallCategory:
+                  type: object
+                  properties:
+                    category:
+                      type: string
+                      example: "Normale"
+                    severity:
+                      type: string
+                      example: ""
+                    message:
+                      type: string
+                      example: "Votre tension artérielle se situe dans la plage normale selon les critères médicaux."
+        heartRate:
+          type: object
+          properties:
+            latest:
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/HeartRateEntry"
+        bodyFat:
+          type: object
+          properties:
+            latest:
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/BodyFatEntry"
+        medications:
+          type: object
+          properties:
+            activeCount:
+              type: integer
+              example: 2
+            upcomingToday:
+              type: array
+              description: "Rappels actifs dont l'horaire est encore à venir aujourd'hui, dans le fuseau horaire de l'utilisateur"
+              items:
+                $ref: "#/components/schemas/MedicationReminder"
+        hydration:
+          type: object
+          properties:
+            isConfigured:
+              type: boolean
+              example: true
+            isActive:
+              type: boolean
+              example: true
+        womenSpecific:
+          type: object
+          nullable: true
+          description: "null si gender=male ; sinon contient cycle et pregnancy"
+          properties:
+            cycle:
+              type: object
+              nullable: true
+              properties:
+                stats:
+                  type: object
+                  properties:
+                    averageLength:
+                      type: number
+                      nullable: true
+                      example: 28
+                    isRegular:
+                      type: boolean
+                      example: true
+                    confidenceLevel:
+                      type: string
+                      example: "high"
+                    cyclesAnalyzed:
+                      type: integer
+                      example: 6
+                nextPrediction:
+                  type: object
+                  properties:
+                    estimatedDate:
+                      type: string
+                      format: date-time
+                      example: "2025-07-01T00:00:00.000Z"
+                    rangeStart:
+                      type: string
+                      format: date-time
+                      example: "2025-06-29T00:00:00.000Z"
+                    rangeEnd:
+                      type: string
+                      format: date-time
+                      example: "2025-07-04T00:00:00.000Z"
+                    confidenceLevel:
+                      type: string
+                      example: "high"
+                    basedOnCyclesCount:
+                      type: integer
+                      example: 6
+            pregnancy:
+              type: object
+              properties:
+                current:
+                  nullable: true
+                  allOf:
+                    - $ref: "#/components/schemas/PregnancyProfile"
+                progress:
+                  nullable: true
+                  allOf:
+                    - $ref: "#/components/schemas/PregnancyProgress"
 
   responses:
     Unauthorized:
