@@ -1292,6 +1292,106 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /water:
+    get:
+      tags: [Water]
+      summary: "Calculer les besoins hydriques quotidiens"
+      description: >
+        Calcule les besoins en eau quotidiens (total en ml) à partir du
+        poids, du niveau d'activité et du climat.
+
+        **Query params :**
+        - `weight` (optionnel) — surcharge le poids utilisé par le calcul
+        - `climate` (optionnel, défaut: `"normal"`) — `"normal"` ou
+          `"hot"` ; toute autre valeur est rejetée en 400
+
+        **Cascade de fallback pour le poids :**
+        1. **Override** — si `weight` est fourni en query, il est utilisé
+           (weightSource: `"override"`)
+        2. **Dernière pesée (BmiEntry)** — sinon, le poids de la dernière
+           entrée BmiEntry est utilisé (weightSource: `"latest_entry"`)
+        3. **Profil santé (HealthProfile)** — en dernier recours, la
+           valeur `currentWeight` du profil santé est utilisée
+           (weightSource: `"health_profile"`)
+
+        **Plancher et plafond de sécurité :**
+        - **Plancher** : le résultat ne descend jamais sous **1 500 ml**.
+          Si le calcul brut est inférieur, il est remonté à 1 500 ml
+          et le message l'indique.
+        - **Plafond** : le résultat ne dépasse jamais **5 000 ml**.
+          Si le calcul brut dépasse 5 000 ml, il est plafonné et le
+          message recommande de consulter un professionnel de santé.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: weight
+          required: false
+          schema:
+            type: number
+            minimum: 20
+            maximum: 300
+          description: "Poids en kg (optionnel, suit la cascade de fallback si omis)"
+        - in: query
+          name: climate
+          required: false
+          schema:
+            type: string
+            enum: [normal, hot]
+            default: normal
+          description: "Climat : 'normal' ou 'hot' (défaut: normal)"
+      responses:
+        "200":
+          description: "Besoins hydriques calculés"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Besoins hydriques calculés"
+                data:
+                  result:
+                    totalMl: 2625
+                    breakdown:
+                      base: 2625
+                      activityBonus: 350
+                      climateBonus: 0
+                    message: "Cette recommandation correspond à vos besoins hydriques quotidiens estimés."
+                    sourceData:
+                      weight: 75
+                      weightSource: "latest_entry"
+                      activityLevel: "moderate"
+                      climate: "normal"
+        "400":
+          description: "Paramètre invalide ou onboarding incomplet"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidClimate:
+                  summary: "Climate hors enum"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "invalid_enum_value"
+                        path: ["climate"]
+                        message: "Valeur invalide. Valeurs attendues: 'normal' | 'hot'"
+                incompleteOnboarding:
+                  summary: "ActivityLevel manquant dans le profil santé"
+                  value:
+                    success: false
+                    message: "Veuillez compléter le questionnaire santé (niveau d'activité) avant de calculer vos besoins hydriques"
+                noHealthProfile:
+                  summary: "Aucun profil santé trouvé"
+                  value:
+                    success: false
+                    message: "Veuillez compléter votre profil de santé avant de calculer vos besoins"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -1820,6 +1920,57 @@ components:
               enum: [override, latest_entry, health_profile]
               description: "Source ayant fourni le poids utilisé par le calcul"
               example: "latest_entry"
+
+    WaterCalculation:
+      type: object
+      description: "Résultat du calcul des besoins hydriques (contenu dans data.result)"
+      properties:
+        totalMl:
+          type: number
+          description: "Besoins hydriques totaux en ml (plafonné à 5000, plancher à 1500)"
+          example: 2625
+        breakdown:
+          type: object
+          description: "Détail des composantes du calcul"
+          required: [base, activityBonus, climateBonus]
+          properties:
+            base:
+              type: number
+              description: "Base calculée à partir du poids (35 ml × kg)"
+              example: 2625
+            activityBonus:
+              type: number
+              description: "Bonus activité physique (0-900 ml selon le niveau)"
+              example: 350
+            climateBonus:
+              type: number
+              description: "Bonus climatique (500 ml si 'hot', sinon 0)"
+              example: 0
+        message:
+          type: string
+          description: "Message explicatif (contient la mention du plancher/plafond si appliqué)"
+          example: "Cette recommandation correspond à vos besoins hydriques quotidiens estimés."
+        sourceData:
+          type: object
+          description: "Données sources utilisées pour le calcul"
+          required: [weight, weightSource, activityLevel, climate]
+          properties:
+            weight:
+              type: number
+              example: 75
+            weightSource:
+              type: string
+              enum: [override, latest_entry, health_profile]
+              description: "Source ayant fourni le poids"
+              example: "latest_entry"
+            activityLevel:
+              type: string
+              enum: [sedentary, light, moderate, active, very_active]
+              example: "moderate"
+            climate:
+              type: string
+              enum: [normal, hot]
+              example: "normal"
 
   responses:
     Unauthorized:
