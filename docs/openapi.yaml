@@ -407,19 +407,23 @@ paths:
           description: "État CSRF (doit correspondre au cookie oauth_state)"
       responses:
         "302":
-          description: "Redirection vers le frontend"
+          description: "Redirection (succès ou échec)"
           headers:
             Set-Cookie:
               schema:
                 type: string
-              description: "Cookies accessToken et refreshToken posés ; cookie oauth_state effacé"
+              description: "Cookies accessToken et refreshToken posés en cas de succès ; cookie oauth_state effacé"
           content:
             text/html:
               schema:
                 type: string
               example: "Redirecting..."
-        "302_google_error":
-          description: "Redirection vers CLIENT_URL/login?error=... en cas d'échec"
+        "400":
+          description: "Paramètre state manquant ou code invalide"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /health-profile:
     get:
@@ -4014,7 +4018,7 @@ paths:
   # MEDICATION
   ############################################################################
 
-  /medication:
+  /medications:
     post:
       tags: [Medication]
       summary: "Créer un rappel de médicament"
@@ -4141,7 +4145,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /medication/{id}:
+  /medications/{id}:
     patch:
       tags: [Medication]
       summary: "Modifier un rappel de médicament"
@@ -4229,7 +4233,7 @@ paths:
                 success: false
                 message: "Reminder not found"
 
-  /medication/{id}/deactivate:
+  /medications/{id}/deactivate:
     patch:
       tags: [Medication]
       summary: "Désactiver un rappel"
@@ -6649,7 +6653,7 @@ components:
             current:
               nullable: true
               allOf:
-                - $ref: "#/components/schemas/WeightEntry"
+                - $ref: "#/components/schemas/BmiEntry"
             goal:
               nullable: true
               allOf:
