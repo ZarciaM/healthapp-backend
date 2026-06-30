@@ -1392,6 +1392,685 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /sleep:
+    post:
+      tags: [Sleep]
+      summary: "Enregistrer une entrée de sommeil"
+      description: >
+        Crée une entrée de sommeil avec les horaires de coucher et de
+        réveil ainsi qu'une note de qualité subjective.
+
+        **IMPORTANT — Dates complètes requises :**
+        `bedTime` et `wakeTime` doivent être des **dates ISO complètes**
+        (jour + heure, ex: `"2025-06-15T23:00:00.000Z"`), pas seulement
+        des heures. Cela permet de gérer correctement les nuits qui
+        traversent minuit (coucher le 15 juin, réveil le 16 juin).
+
+        **Contraintes temporelles :**
+        - `wakeTime` doit être **strictement postérieur** à `bedTime`
+          (sinon 400)
+        - L'écart entre `wakeTime` et `bedTime` ne peut pas dépasser
+          **24 heures** (sinon 400)
+        - `bedTime` et `wakeTime` ne peuvent pas être dans le futur
+
+        **Valeurs calculées à la création :**
+        - `durationMinutes` : durée calculée en minutes (différence
+          wakeTime - bedTime)
+        - `feedback` : objet avec `message` et `isHealthyRange`
+          (basé sur la fonction `getSleepDurationFeedback`)
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSleepEntryInput"
+            example:
+              bedTime: "2025-06-15T23:00:00.000Z"
+              wakeTime: "2025-06-16T07:30:00.000Z"
+              quality: 4
+      responses:
+        "201":
+          description: "Entrée de sommeil créée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Entrée de sommeil créée"
+                data:
+                  entry:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    bedTime: "2025-06-15T23:00:00.000Z"
+                    wakeTime: "2025-06-16T07:30:00.000Z"
+                    durationMinutes: 510
+                    quality: 4
+                    recordedAt: "2025-06-16T07:30:00.000Z"
+                    feedback:
+                      message: "Votre durée de sommeil se situe dans la plage généralement recommandée pour un adulte. Continuez ainsi."
+                      isHealthyRange: true
+                    createdAt: "2025-06-16T07:30:00.000Z"
+                    updatedAt: "2025-06-16T07:30:00.000Z"
+        "400":
+          description: "Données invalides (validation Zod)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                wakeBeforeBed:
+                  summary: "Réveil avant coucher"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "custom"
+                        path: []
+                        message: "L'heure de réveil doit être après l'heure de coucher"
+                over24h:
+                  summary: "Écart > 24h"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "custom"
+                        path: []
+                        message: "La durée entre le coucher et le réveil ne peut pas dépasser 24 heures"
+                futureDate:
+                  summary: "Date dans le futur"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "custom"
+                        path: ["bedTime"]
+                        message: "La date de coucher ne peut pas être dans le futur"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /sleep/history:
+    get:
+      tags: [Sleep]
+      summary: "Historique des entrées de sommeil"
+      description: >
+        Retourne la liste des entrées de sommeil, triées par `bedTime`
+        décroissant. Les paramètres `from` et `to` filtrent par plage
+        de dates sur `bedTime`. Le paramètre `limit` contrôle le nombre
+        de résultats (défaut 50, max 200). `from` doit précéder `to`
+        si les deux sont fournis.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: "Nombre d'entrées (doit être un entier positif)"
+        - in: query
+          name: from
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Borne inférieure (incluse) sur bedTime"
+        - in: query
+          name: to
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Borne supérieure (incluse) sur bedTime"
+      responses:
+        "200":
+          description: "Historique récupéré"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Historique récupéré"
+                data:
+                  entries:
+                    - _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                      userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                      bedTime: "2025-06-15T23:00:00.000Z"
+                      wakeTime: "2025-06-16T07:30:00.000Z"
+                      durationMinutes: 510
+                      quality: 4
+                      recordedAt: "2025-06-16T07:30:00.000Z"
+                      createdAt: "2025-06-16T07:30:00.000Z"
+                      updatedAt: "2025-06-16T07:30:00.000Z"
+        "400":
+          description: "Paramètre invalide (limit non entier, from > to, dates invalides)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /sleep/latest:
+    get:
+      tags: [Sleep]
+      summary: "Dernière entrée de sommeil"
+      description: >
+        Retourne l'entrée de sommeil la plus récente (triée par
+        `bedTime` décroissant). **La réponse peut être
+        `{ data: { entry: null } }` si aucune entrée n'existe —
+        ce n'est PAS une erreur 404.**
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Dernière entrée de sommeil (peut être null)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                found:
+                  summary: "Entrée trouvée"
+                  value:
+                    success: true
+                    message: "Dernière entrée de sommeil"
+                    data:
+                      entry:
+                        _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        bedTime: "2025-06-15T23:00:00.000Z"
+                        wakeTime: "2025-06-16T07:30:00.000Z"
+                        durationMinutes: 510
+                        quality: 4
+                        recordedAt: "2025-06-16T07:30:00.000Z"
+                        createdAt: "2025-06-16T07:30:00.000Z"
+                        updatedAt: "2025-06-16T07:30:00.000Z"
+                notFound:
+                  summary: "Aucune entrée (null)"
+                  value:
+                    success: true
+                    message: "Dernière entrée de sommeil"
+                    data:
+                      entry: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /sleep/averages:
+    get:
+      tags: [Sleep]
+      summary: "Moyennes de sommeil sur une période"
+      description: >
+        Calcule les moyennes de durée et de qualité de sommeil sur une
+        période donnée via agrégation MongoDB. Si aucune donnée n'existe
+        sur la période, `entriesCount` est 0 et les moyennes sont à 0
+        (pas de valeurs NaN). Le paramètre optionnel `days` contrôle la
+        fenêtre de calcul (défaut: 7 jours).
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: days
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 7
+          description: "Nombre de jours sur lesquels calculer les moyennes (doit être un entier positif)"
+      responses:
+        "200":
+          description: "Moyennes de sommeil"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                withData:
+                  summary: "Données trouvées sur la période"
+                  value:
+                    success: true
+                    message: "Moyennes de sommeil"
+                    data:
+                      averages:
+                        averageDurationMinutes: 458
+                        averageQuality: 3.7
+                        entriesCount: 12
+                        message: "Moyennes calculées sur 12 nuits (7 derniers jours)"
+                noData:
+                  summary: "Aucune donnée sur la période"
+                  value:
+                    success: true
+                    message: "Moyennes de sommeil"
+                    data:
+                      averages:
+                        averageDurationMinutes: 0
+                        averageQuality: 0
+                        entriesCount: 0
+                        message: "Aucune donnée de sommeil enregistrée sur cette période"
+        "400":
+          description: "Paramètre days invalide"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Le paramètre days doit être un entier positif"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /sleep/{id}:
+    delete:
+      tags: [Sleep]
+      summary: "Supprimer une entrée de sommeil"
+      description: >
+        Supprime une entrée de sommeil. Le middleware `validateObjectId`
+        vérifie que l'ID est un ObjectId MongoDB valide (sinon 400). La
+        suppression est protégée contre les attaques IDOR : le service
+        vérifie que l'entrée appartient bien à l'utilisateur connecté
+        (sinon 403). Si l'ObjectId est valide mais l'entrée introuvable,
+        une erreur 404 est retournée.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId MongoDB de l'entrée de sommeil"
+      responses:
+        "200":
+          description: "Entrée de sommeil supprimée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Entrée de sommeil supprimée"
+        "400":
+          description: "ID malformé (ObjectId invalide)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "ID invalide"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Tentative de suppression d'une entrée ne vous appartenant pas (IDOR)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Vous ne pouvez pas supprimer une entrée qui ne vous appartient pas"
+        "404":
+          description: "Entrée introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Entrée de sommeil introuvable"
+
+  /blood-pressure:
+    post:
+      tags: [BloodPressure]
+      summary: "Enregistrer une mesure de tension artérielle"
+      description: >
+        Crée une entrée de pression artérielle à partir des valeurs
+        systolique, diastolique et du pouls. La catégorie et la sévérité
+        sont calculées côté serveur par `getBloodPressureCategory`.
+
+        **ATTENTION — Module médicalement sensible :**
+        Tous les messages retournés utilisent un langage de suggestion
+        ("suggèrent", "recommandons"), jamais de diagnostic médical
+        affirmatif.
+
+        **Règle de validation `diastolic - systolic ≤ 10` :**
+        La requête est rejetée si la diastolique dépasse la systolique
+        de plus de 10 mmHg (signal probable d'inversion des deux
+        valeurs). En revanche, **aucun rejet n'a lieu si l'écart est
+        faible** (ex: 119/121), pour ne jamais bloquer un cas médical
+        réel comme une crise hypertensive diastolique isolée.
+
+        **Calcul de la catégorie :**
+        La catégorie et la sévérité sont déterminées selon la valeur
+        **la plus sévère** entre systolique et diastolique (pas une
+        moyenne, pas une priorité au seul systolic). Les catégories
+        possibles sont :
+
+        | Catégorie | Sévérité |
+        |---|---|
+        | `hypotension` | `elevated` |
+        | `normale` | `normal` |
+        | `elevee` | `elevated` |
+        | `hypertension_stade_1` | `high` |
+        | `hypertension_stade_2` | `high` |
+        | `crise_hypertensive` | `critical` |
+
+        **Gestion des cas `critical` :**
+        Pour `severity: critical`, le message oriente vers une action
+        (consultation médicale / urgence) sans alarmisme excessif.
+
+        Le champ `recordedAt` est optionnel ; s'il est omis, la date
+        courante est utilisée.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBloodPressureEntryInput"
+            example:
+              systolic: 130
+              diastolic: 85
+              pulse: 72
+              recordedAt: "2025-06-15T08:00:00.000Z"
+      responses:
+        "201":
+          description: "Entrée de pression artérielle créée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Entrée de pression artérielle créée"
+                data:
+                  entry:
+                    _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                    userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                    systolic: 130
+                    diastolic: 85
+                    pulse: 72
+                    category: "hypertension_stade_1"
+                    severity: "high"
+                    message: "Vos valeurs suggèrent une hypertension de stade 1. Nous vous recommandons d'en parler à un professionnel de santé."
+                    recordedAt: "2025-06-15T08:00:00.000Z"
+                    createdAt: "2025-06-15T08:00:00.000Z"
+                    updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Données invalides (validation Zod)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invertedValues:
+                  summary: "Diastolique anormalement supérieure à systolique"
+                  value:
+                    success: false
+                    message: "Validation échouée"
+                    details:
+                      - code: "custom"
+                        path: []
+                        message: "La pression diastolique dépasse anormalement la pression systolique. Vérifiez les valeurs saisies."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /blood-pressure/history:
+    get:
+      tags: [BloodPressure]
+      summary: "Historique des mesures de tension"
+      description: >
+        Retourne la liste des mesures de pression artérielle, triées par
+        `recordedAt` décroissant. Les paramètres `from` et `to` filtrent
+        par plage de dates. `from` doit précéder `to` si les deux sont
+        fournis. Le paramètre `limit` contrôle le nombre de résultats
+        (défaut 50, max 200).
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: "Nombre d'entrées (doit être un entier positif)"
+        - in: query
+          name: from
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Borne inférieure (incluse) sur recordedAt"
+        - in: query
+          name: to
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: "Borne supérieure (incluse) sur recordedAt"
+      responses:
+        "200":
+          description: "Historique récupéré"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Historique récupéré"
+                data:
+                  entries:
+                    - _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                      userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                      systolic: 130
+                      diastolic: 85
+                      pulse: 72
+                      category: "hypertension_stade_1"
+                      severity: "high"
+                      recordedAt: "2025-06-15T08:00:00.000Z"
+                      createdAt: "2025-06-15T08:00:00.000Z"
+                      updatedAt: "2025-06-15T08:00:00.000Z"
+        "400":
+          description: "Paramètre invalide (limit non entier, from > to, dates invalides)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /blood-pressure/latest:
+    get:
+      tags: [BloodPressure]
+      summary: "Dernière mesure de tension"
+      description: >
+        Retourne la mesure de pression artérielle la plus récente (triée
+        par `recordedAt` décroissant). **La réponse peut être
+        `{ data: { entry: null } }` si aucune mesure n'existe —
+        ce n'est PAS une erreur 404.**
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: "Dernière mesure de tension (peut être null)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                found:
+                  summary: "Mesure trouvée"
+                  value:
+                    success: true
+                    message: "Dernière entrée de pression artérielle"
+                    data:
+                      entry:
+                        _id: "664a1b2c3d4e5f6a7b8c9d0e"
+                        userId: "664a1b2c3d4e5f6a7b8c9d0f"
+                        systolic: 130
+                        diastolic: 85
+                        pulse: 72
+                        category: "hypertension_stade_1"
+                        severity: "high"
+                        recordedAt: "2025-06-15T08:00:00.000Z"
+                        createdAt: "2025-06-15T08:00:00.000Z"
+                        updatedAt: "2025-06-15T08:00:00.000Z"
+                notFound:
+                  summary: "Aucune mesure (null)"
+                  value:
+                    success: true
+                    message: "Dernière entrée de pression artérielle"
+                    data:
+                      entry: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /blood-pressure/averages:
+    get:
+      tags: [BloodPressure]
+      summary: "Moyennes de tension sur une période"
+      description: >
+        Calcule les moyennes de pression artérielle et de pouls sur une
+        période donnée via agrégation MongoDB. Une catégorie globale
+        (`overallCategory`) est également déterminée à partir des
+        moyennes arrondies via `getBloodPressureCategory`. Si aucune
+        donnée n'existe sur la période, `entriesCount` est 0 et les
+        moyennes sont à 0 (pas de NaN). Le paramètre `days` contrôle
+        la fenêtre (défaut: 7, max: 365).
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: days
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 365
+            default: 7
+          description: "Nombre de jours sur lesquels calculer les moyennes (1-365, entier positif)"
+      responses:
+        "200":
+          description: "Moyennes de tension"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                withData:
+                  summary: "Données trouvées sur la période"
+                  value:
+                    success: true
+                    message: "Moyennes de pression artérielle"
+                    data:
+                      averages:
+                        averageSystolic: 128.5
+                        averageDiastolic: 82.3
+                        averagePulse: 71.0
+                        entriesCount: 15
+                        overallCategory:
+                          category: "hypertension_stade_1"
+                          severity: "high"
+                          message: "Vos valeurs suggèrent une hypertension de stade 1. Nous vous recommandons d'en parler à un professionnel de santé."
+                noData:
+                  summary: "Aucune donnée sur la période"
+                  value:
+                    success: true
+                    message: "Moyennes de pression artérielle"
+                    data:
+                      averages:
+                        averageSystolic: 0
+                        averageDiastolic: 0
+                        averagePulse: 0
+                        entriesCount: 0
+                        overallCategory:
+                          category: "aucune_donnee"
+                          severity: ""
+                          message: "Aucune donnée de pression artérielle enregistrée sur cette période"
+        "400":
+          description: "Paramètre days invalide (non entier, < 1, > 365)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Le paramètre days ne peut pas dépasser 365"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /blood-pressure/{id}:
+    delete:
+      tags: [BloodPressure]
+      summary: "Supprimer une mesure de tension"
+      description: >
+        Supprime une entrée de pression artérielle. Le middleware
+        `validateObjectId` vérifie que l'ID est un ObjectId MongoDB
+        valide (sinon 400). La suppression est protégée contre les
+        attaques IDOR : le service vérifie que l'entrée appartient
+        bien à l'utilisateur connecté (sinon 403). Si l'ObjectId est
+        valide mais l'entrée introuvable, une erreur 404 est retournée.
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{24}$"
+          description: "ObjectId MongoDB de l'entrée de pression artérielle"
+      responses:
+        "200":
+          description: "Entrée supprimée"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                message: "Entrée de pression artérielle supprimée"
+        "400":
+          description: "ID malformé (ObjectId invalide)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "ID d'entrée de pression artérielle invalide"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Tentative de suppression d'une entrée ne vous appartenant pas (IDOR)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Vous ne pouvez pas supprimer une entrée qui ne vous appartient pas"
+        "404":
+          description: "Entrée introuvable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Entrée de pression artérielle introuvable"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -1971,6 +2650,206 @@ components:
               type: string
               enum: [normal, hot]
               example: "normal"
+
+    SleepEntry:
+      type: object
+      description: "Entrée de sommeil"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        userId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0f"
+        bedTime:
+          type: string
+          format: date-time
+          description: "Date et heure du coucher (date ISO complète, pas seulement l'heure)"
+          example: "2025-06-15T23:00:00.000Z"
+        wakeTime:
+          type: string
+          format: date-time
+          description: "Date et heure du réveil (date ISO complète, pas seulement l'heure)"
+          example: "2025-06-16T07:30:00.000Z"
+        durationMinutes:
+          type: integer
+          description: "Durée du sommeil en minutes (calculée côté serveur)"
+          example: 510
+        quality:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: "Qualité subjective du sommeil (1 = très mauvaise, 5 = excellente)"
+          example: 4
+        recordedAt:
+          type: string
+          format: date-time
+          description: "Date d'enregistrement (défaut: Date.now)"
+          example: "2025-06-16T07:30:00.000Z"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateSleepEntryInput:
+      type: object
+      description: "Payload pour créer une entrée de sommeil"
+      required: [bedTime, wakeTime, quality]
+      properties:
+        bedTime:
+          type: string
+          format: date-time
+          description: "Date et heure du coucher (ISO complète). Ne peut pas être dans le futur."
+          example: "2025-06-15T23:00:00.000Z"
+        wakeTime:
+          type: string
+          format: date-time
+          description: "Date et heure du réveil (ISO complète). Doit être après bedTime, écart max 24h. Ne peut pas être dans le futur."
+          example: "2025-06-16T07:30:00.000Z"
+        quality:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: "Qualité subjective du sommeil"
+          example: 4
+
+    SleepAverages:
+      type: object
+      description: "Moyennes de sommeil sur une période (contenu dans data.averages)"
+      properties:
+        averageDurationMinutes:
+          type: number
+          description: "Durée moyenne en minutes (arrondie à l'entier). 0 si aucune donnée."
+          example: 458
+        averageQuality:
+          type: number
+          description: "Qualité moyenne (arrondie à 1 décimale). 0 si aucune donnée."
+          example: 3.7
+        entriesCount:
+          type: integer
+          description: "Nombre d'entrées sur la période. 0 si aucune donnée (pas de NaN)."
+          example: 12
+        message:
+          type: string
+          description: "Message indiquant le nombre de nuits analysées ou l'absence de données"
+          example: "Moyennes calculées sur 12 nuits (7 derniers jours)"
+
+    BloodPressureEntry:
+      type: object
+      description: "Entrée de pression artérielle"
+      properties:
+        _id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0e"
+        userId:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+          example: "664a1b2c3d4e5f6a7b8c9d0f"
+        systolic:
+          type: integer
+          description: "Pression systolique en mmHg"
+          example: 130
+        diastolic:
+          type: integer
+          description: "Pression diastolique en mmHg"
+          example: 85
+        pulse:
+          type: integer
+          description: "Pouls en bpm"
+          example: 72
+        category:
+          type: string
+          enum: [hypotension, normale, elevee, hypertension_stade_1, hypertension_stade_2, crise_hypertensive]
+          description: "Catégorie déterminée par getBloodPressureCategory (selon la valeur la plus sévère entre systolique et diastolique)"
+          example: "hypertension_stade_1"
+        severity:
+          type: string
+          enum: [normal, elevated, high, critical]
+          description: "Sévérité associée à la catégorie"
+          example: "high"
+        recordedAt:
+          type: string
+          format: date-time
+          description: "Date de la mesure (peut différer de createdAt si fournie par le client)"
+          example: "2025-06-15T08:00:00.000Z"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateBloodPressureEntryInput:
+      type: object
+      description: "Payload pour créer une mesure de pression artérielle"
+      required: [systolic, diastolic, pulse]
+      properties:
+        systolic:
+          type: integer
+          minimum: 50
+          maximum: 250
+          description: "Pression systolique en mmHg (nombre entier)"
+          example: 130
+        diastolic:
+          type: integer
+          minimum: 30
+          maximum: 150
+          description: "Pression diastolique en mmHg (nombre entier). Ne doit pas dépasser systolic de plus de 10."
+          example: 85
+        pulse:
+          type: integer
+          minimum: 30
+          maximum: 220
+          description: "Pouls en bpm (nombre entier)"
+          example: 72
+        recordedAt:
+          type: string
+          format: date-time
+          description: "Date de la mesure (optionnelle, défaut: Date.now). Ne peut pas être dans le futur."
+          example: "2025-06-15T08:00:00.000Z"
+
+    BloodPressureAverages:
+      type: object
+      description: "Moyennes de pression artérielle sur une période (contenu dans data.averages)"
+      properties:
+        averageSystolic:
+          type: number
+          description: "Moyenne systolique (arrondie à 1 décimale). 0 si aucune donnée."
+          example: 128.5
+        averageDiastolic:
+          type: number
+          description: "Moyenne diastolique (arrondie à 1 décimale). 0 si aucune donnée."
+          example: 82.3
+        averagePulse:
+          type: number
+          description: "Moyenne du pouls (arrondie à 1 décimale). 0 si aucune donnée."
+          example: 71.0
+        entriesCount:
+          type: integer
+          description: "Nombre d'entrées sur la période. 0 si aucune donnée (pas de NaN)."
+          example: 15
+        overallCategory:
+          type: object
+          description: "Catégorie globale déterminée à partir des moyennes arrondies via getBloodPressureCategory"
+          properties:
+            category:
+              type: string
+              enum: [aucune_donnee, hypotension, normale, elevee, hypertension_stade_1, hypertension_stade_2, crise_hypertensive]
+              example: "hypertension_stade_1"
+            severity:
+              type: string
+              enum: ["", normal, elevated, high, critical]
+              description: "Sévérité (chaîne vide si aucune donnée)"
+              example: "high"
+            message:
+              type: string
+              description: "Message médicalement prudent (langage de suggestion, pas de diagnostic)"
+              example: "Vos valeurs suggèrent une hypertension de stade 1. Nous vous recommandons d'en parler à un professionnel de santé."
 
   responses:
     Unauthorized:
